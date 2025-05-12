@@ -43,9 +43,6 @@ int main(void) {
       return 1;
     }
 
-    /* EXPANSION PHASE */
-    expander(command_struct);
-
     /* EXECUTION PHASE */
     status = executor(command_struct);
     if (status == -1) {

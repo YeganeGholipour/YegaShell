@@ -11,6 +11,7 @@
 #include "builtin.h"
 #include "env_variable.h"
 #include "executor.h"
+#include "expander.h"
 
 int execute(COMMAND *cmd);
 int is_buitin(COMMAND *cmd);
@@ -29,6 +30,21 @@ int execute(COMMAND *cmd) {
   if (pid == 0) {
     signal(SIGINT, SIG_DFL);
     signal(SIGQUIT, SIG_DFL);
+
+    char *full_path = get_full_path(cmd->argv[0]);
+    if (!full_path) {
+      fprintf(stderr, "%s: command not found\n", cmd->argv[0]);
+      exit(EXIT_FAILURE);
+    }
+
+    char **envp = build_envp();
+    if (!envp) {
+      fprintf(stderr, "Failed to build environment\n");
+      free(full_path);
+      exit(EXIT_FAILURE);
+    }
+
+    expander(cmd, envp);
 
     if (cmd->infile) {
       int in_fd = open(cmd->infile, O_RDONLY);
@@ -52,19 +68,6 @@ int execute(COMMAND *cmd) {
       }
       dup2(out_fd, STDOUT_FILENO);
       close(out_fd);
-    }
-
-    char *full_path = get_full_path(cmd->argv[0]);
-    if (!full_path) {
-      fprintf(stderr, "%s: command not found\n", cmd->argv[0]);
-      exit(EXIT_FAILURE);
-    }
-
-    char **envp = build_envp();
-    if (!envp) {
-      fprintf(stderr, "Failed to build environment\n");
-      free(full_path);
-      exit(EXIT_FAILURE);
     }
 
     execve(full_path, cmd->argv, envp);

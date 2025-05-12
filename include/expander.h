@@ -5,6 +5,6 @@
 
 #define MAXSIZ 1024
 
-void expander(COMMAND *cmd);
+void expander(COMMAND *cmd, char **envp);
 
 #endif
