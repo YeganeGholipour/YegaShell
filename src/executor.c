@@ -20,6 +20,8 @@ char **build_envp(void);
 
 Variable *variable_table[TABLESIZE] = {NULL};
 
+int last_exit_status = 0;
+
 int execute(COMMAND *cmd) {
   pid_t pid = fork();
   if (pid < 0) {
@@ -83,6 +85,8 @@ int execute(COMMAND *cmd) {
     if (!cmd->background) {
       int status;
       waitpid(pid, &status, 0);
+      if (WIFEXITED(status))
+        last_exit_status = WEXITSTATUS(status);
     }
   }
   return 0;
@@ -98,7 +102,7 @@ int executor(COMMAND *cmd) {
   if (func_num == -1)
     return execute(cmd);
   else {
-    builtin_commands[func_num].func(cmd);
+    last_exit_status = builtin_commands[func_num].func(cmd);
     return 0;
   }
 }

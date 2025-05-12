@@ -64,6 +64,10 @@ void expander(COMMAND *cmd, char **envp) {
         char pid_tmp[20];
         snprintf(pid_tmp, sizeof pid_tmp, "%d", getpid());
         newstr = strdup(pid_tmp);
+      } else if (strcmp(token, "$?") == 0) {
+        char exit_status[12];
+        snprintf(exit_status, sizeof(exit_status), "%d", last_exit_status);
+        newstr = strdup(exit_status);
       } else {
         newstr = expand_variable(token, envp);
       }

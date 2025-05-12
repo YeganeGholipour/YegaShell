@@ -5,6 +5,8 @@
 
 #define MAXSIZ 1024
 
+extern int last_exit_status;
+
 void expander(COMMAND *cmd, char **envp);
 
 #endif
