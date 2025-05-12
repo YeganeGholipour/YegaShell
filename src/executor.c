@@ -73,7 +73,6 @@ int execute(COMMAND *cmd) {
     execve(full_path, cmd->argv, envp);
     perror("execve failed");
 
-    // Free envp memory on failure
     for (int i = 0; envp[i]; i++)
       free(envp[i]);
     free(envp);
@@ -99,7 +98,8 @@ int executor(COMMAND *cmd) {
   if (func_num == -1)
     return execute(cmd);
   else {
-    return builtin_commands[func_num].func(cmd);
+    builtin_commands[func_num].func(cmd);
+    return 0;
   }
 }
 
@@ -114,7 +114,6 @@ int is_buitin(COMMAND *cmd) {
 
 char *get_full_path(const char *command) {
   if (strchr(command, '/')) {
-    // Already has a path (e.g. ./a.out or /bin/ls)
     if (access(command, X_OK) == 0)
       return strdup(command);
     return NULL;
@@ -146,13 +145,11 @@ char *get_full_path(const char *command) {
 
 char **build_envp(void) {
   int count = 0;
-  // Count exported vars
   for (int i = 0; i < TABLESIZE; i++)
     for (Variable *vp = variable_table[i]; vp; vp = vp->next)
       if (vp->exported)
         count++;
 
-  // Allocate the pointer array (+1 for NULL terminator)
   char **envp = malloc((count + 1) * sizeof(char *));
   if (!envp) {
     perror("malloc envp array");
@@ -169,7 +166,6 @@ char **build_envp(void) {
       char *entry = malloc(len);
       if (!entry) {
         perror("malloc envp entry");
-        // **Cleanup on failure**:
         for (int k = 0; k < idx; k++)
           free(envp[k]);
         free(envp);
