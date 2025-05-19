@@ -29,6 +29,8 @@ int execute(COMMAND *cmd) {
     return -1;
   }
 
+  setpgid(0, 0);
+
   if (pid == 0) {
     signal(SIGINT, SIG_DFL);
     signal(SIGQUIT, SIG_DFL);
@@ -82,11 +84,14 @@ int execute(COMMAND *cmd) {
     exit(EXIT_FAILURE);
 
   } else {
+    setpgid(pid, pid);
     if (!cmd->background) {
+      tcsetpgrp(STDIN_FILENO, pid);
       int status;
       waitpid(pid, &status, 0);
       if (WIFEXITED(status))
         last_exit_status = WEXITSTATUS(status);
+      tcsetpgrp(STDIN_FILENO, getpgrp());
     }
   }
   return 0;
