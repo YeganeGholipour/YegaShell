@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
@@ -25,30 +26,25 @@ int last_exit_status = 0;
 int execute(COMMAND *cmd) {
   pid_t pid = fork();
   if (pid < 0) {
-    perror("fork failed\n");
+    perror("fork failed");
     return -1;
   }
 
-  setpgid(0, 0);
-
   if (pid == 0) {
+    /* CHILD */
     signal(SIGINT, SIG_DFL);
     signal(SIGQUIT, SIG_DFL);
-
-    char *full_path = get_full_path(cmd->argv[0]);
-    if (!full_path) {
-      fprintf(stderr, "%s: command not found\n", cmd->argv[0]);
+    signal(SIGTSTP, SIG_DFL);
+    
+    if (setpgid(0, 0) < 0) {
+      perror("child: setpgid failed");
       exit(EXIT_FAILURE);
     }
+    pid_t child_pgid = getpid();
 
-    char **envp = build_envp();
-    if (!envp) {
-      fprintf(stderr, "Failed to build environment\n");
-      free(full_path);
-      exit(EXIT_FAILURE);
+    if (tcsetpgrp(STDIN_FILENO, child_pgid) < 0) {
+      perror("child: tcsetpgrp failed");
     }
-
-    expander(cmd, envp);
 
     if (cmd->infile) {
       int in_fd = open(cmd->infile, O_RDONLY);
@@ -60,23 +56,32 @@ int execute(COMMAND *cmd) {
       close(in_fd);
     }
     if (cmd->outfile) {
-      int out_fd;
-      if (cmd->append_output)
-        out_fd = open(cmd->outfile, O_WRONLY | O_CREAT | O_APPEND, 0644);
-      else
-        out_fd = open(cmd->outfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-
+      int flags =
+          O_WRONLY | O_CREAT | (cmd->append_output ? O_APPEND : O_TRUNC);
+      int out_fd = open(cmd->outfile, flags, 0644);
       if (out_fd < 0) {
-        perror("failed to open output file\n");
+        perror("failed to open output file");
         exit(EXIT_FAILURE);
       }
       dup2(out_fd, STDOUT_FILENO);
       close(out_fd);
     }
 
+    char *full_path = get_full_path(cmd->argv[0]);
+    if (!full_path) {
+      fprintf(stderr, "%s: command not found\n", cmd->argv[0]);
+      exit(EXIT_FAILURE);
+    }
+    char **envp = build_envp();
+    if (!envp) {
+      fprintf(stderr, "Failed to build environment\n");
+      free(full_path);
+      exit(EXIT_FAILURE);
+    }
+    expander(cmd, envp);
+
     execve(full_path, cmd->argv, envp);
     perror("execve failed");
-
     for (int i = 0; envp[i]; i++)
       free(envp[i]);
     free(envp);
@@ -84,14 +89,36 @@ int execute(COMMAND *cmd) {
     exit(EXIT_FAILURE);
 
   } else {
-    setpgid(pid, pid);
+    /* PARENT */
+    if (setpgid(pid, pid) < 0 && errno != EACCES && errno != EINVAL) {
+      perror("parent: setpgid failed");
+    }
+
     if (!cmd->background) {
-      tcsetpgrp(STDIN_FILENO, pid);
+      if (tcsetpgrp(STDIN_FILENO, pid) < 0) {
+        perror("parent: tcsetpgrp failed");
+      }
+
       int status;
-      waitpid(pid, &status, 0);
-      if (WIFEXITED(status))
+      if (waitpid(pid, &status, WUNTRACED) < 0) {
+        perror("waitpid failed");
+      }
+
+      if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0) {
+        perror("parent: couldn’t reclaim terminal");
+      }
+
+      if (WIFEXITED(status)) {
         last_exit_status = WEXITSTATUS(status);
-      tcsetpgrp(STDIN_FILENO, getpgrp());
+      } else if (WIFSIGNALED(status)) {
+        last_exit_status = 128 + WTERMSIG(status);
+      } else if (WIFSTOPPED(status)) {
+        last_exit_status = 128 + WSTOPSIG(status);
+        fprintf(stderr, "\n[%d]+  Stopped\t%s\n", pid, cmd->argv[0]);
+        /* track job if you want a proper job table */
+      }
+    } else {
+      printf("Background job %d started\n", pid);
     }
   }
   return 0;
