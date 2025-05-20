@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #include "tokenizer.h"
 
@@ -22,9 +23,8 @@ char *handle_double_quotes(char token_buffer[], char *p, int max_len);
 char *handle_special_characters(char token_buffer[], char *p, int max_len);
 
 int prompt_and_read(char **line_buffer, size_t *read) {
-  size_t buffsize = 0;
+  size_t buffsize;
   *line_buffer = NULL;
-  printf("****************************\n");
   printf("YegaShell> ");
   *read = getline(line_buffer, &buffsize, stdin);
 

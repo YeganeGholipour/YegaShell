@@ -1,3 +1,6 @@
+#define _POSIX_C_SOURCE 200809L
+
+#include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,27 +13,42 @@
 #include "parser.h"
 #include "tokenizer.h"
 
-static void init_shell_signals(void);
+volatile sig_atomic_t interrupted = 0;
+
+void sigint_handler(int sig) {
+  (void)sig;
+  interrupted = 1;
+  write(STDOUT_FILENO, "\n", 1);
+}
+
+void sigquit_handler(int sig) {
+  (void)sig;
+  interrupted = 1;
+  write(STDOUT_FILENO, "\n", 1);
+}
+
+static void ignore_job_control_signals(void) {
+  signal(SIGTSTP, SIG_IGN);
+  signal(SIGTTIN, SIG_IGN);
+  signal(SIGTTOU, SIG_IGN);
+}
 
 static void init_shell_signals(void) {
-  if (signal(SIGINT, SIG_IGN) == SIG_ERR) {
-    perror("signal SIGINT");
+  struct sigaction sa_sigint, sa_sigquit;
+
+  sa_sigint.sa_handler = sigint_handler;
+  sa_sigint.sa_flags = 0;
+  sigemptyset(&sa_sigint.sa_mask);
+  if (sigaction(SIGINT, &sa_sigint, NULL) == -1) {
+    perror("sigaction SIGINT");
     exit(EXIT_FAILURE);
   }
-  if (signal(SIGQUIT, SIG_IGN) == SIG_ERR) {
-    perror("signal SIGQUIT");
-    exit(EXIT_FAILURE);
-  }
-  if (signal(SIGTSTP, SIG_IGN) == SIG_ERR) {
-    perror("signal SIGTSTP");
-    exit(EXIT_FAILURE);
-  }
-  if (signal(SIGTTOU, SIG_IGN) == SIG_ERR) {
-    perror("signal SIGTTOU");
-    exit(EXIT_FAILURE);
-  }
-  if (signal(SIGTTIN, SIG_IGN) == SIG_ERR) {
-    perror("signal SIGTTIN");
+
+  sa_sigquit.sa_handler = sigquit_handler;
+  sa_sigquit.sa_flags = 0;
+  sigemptyset(&sa_sigquit.sa_mask);
+  if (sigaction(SIGQUIT, &sa_sigquit, NULL) == -1) {
+    perror("sigaction SIGQUIT");
     exit(EXIT_FAILURE);
   }
 }
@@ -40,7 +58,7 @@ int main(void) {
   char *line_buffer = NULL;
   COMMAND *command_struct = NULL;
   size_t read;
-  int token_status, token_num, prompt_status, status;
+  int token_status, token_num, prompt_status, parser_status, executor_status;
 
   pid_t shell_pgid = getpid();
   if (setpgid(shell_pgid, shell_pgid) < 0) {
@@ -51,11 +69,29 @@ int main(void) {
     perror("shell: tcsetpgrp failed");
   }
 
+  ignore_job_control_signals();
   init_shell_signals();
 
   /* PROMPT PHASE */
-  while ((prompt_status = prompt_and_read(&line_buffer, &read)) == 0) {
-    if (line_buffer[read - 1] == '\n')
+  while (1) {
+    if (interrupted) {
+      interrupted = 0;
+      continue;
+    }
+    prompt_status = prompt_and_read(&line_buffer, &read);
+    if (prompt_status < 0) {
+      if (errno == EINTR) {
+        clearerr(stdin);
+        continue;
+      } else if (feof(stdin)) {
+        fprintf(stderr, " Detected EOF (Ctrl+D), exiting...\n");
+        break;
+      } else {
+        perror("getline");
+        exit(EXIT_FAILURE);
+      }
+    }
+    if (read > 0 && line_buffer[read - 1] == '\n')
       line_buffer[read - 1] = '\0';
 
     /* TOKENIZE PHASE */
@@ -66,28 +102,28 @@ int main(void) {
       fprintf(stderr, "Error: tokenizing input\n");
       continue;
     }
+    if (token_num == 0)
+      continue;
 
     /* PARSING PHASE */
-    if (parse(tokens, &command_struct, token_num) < 0) {
+    parser_status = parse(tokens, &command_struct, token_num);
+    if (parser_status < 0) {
       fprintf(stderr, "parser: error\n");
-      return 1;
+      break;
     }
 
     /* EXECUTION PHASE */
-    status = executor(command_struct);
-    if (status == -1) {
+    executor_status = executor(command_struct);
+    if (executor_status == -1) {
       fprintf(stderr, "failed to execute\n");
       exit(EXIT_FAILURE);
     }
 
     /* FREE MEMORY - LAST STEP */
     freeMemory(tokens, token_num);
+    free_struct_memory(command_struct);
   }
 
-  if (prompt_status < 0) {
-    fprintf(stderr, "Detected EOF (Ctrl+D), exiting...\n");
-    return -1;
-  }
   free(line_buffer);
   return 0;
 }

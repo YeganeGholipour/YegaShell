@@ -13,7 +13,7 @@ typedef struct {
   int background;
 } COMMAND;
 
-void free_memory(COMMAND *cmd);
+void free_struct_memory(COMMAND *cmd);
 int parse(char *tokens[], COMMAND **command_struct, size_t num_tokens);
 void print_command_struct(COMMAND *command_struct);
 

@@ -41,7 +41,7 @@ COMMAND *allocate_memory(size_t num_args) {
   return cmd;
 }
 
-void free_memory(COMMAND *cmd) {
+void free_struct_memory(COMMAND *cmd) {
   if (!cmd)
     return;
 
@@ -56,11 +56,6 @@ void free_memory(COMMAND *cmd) {
 }
 
 int parse(char *tokens[], COMMAND **cmd_ptr, size_t num_tokens) {
-  if (num_tokens == 0) {
-    fprintf(stderr, "parser: syntax error: empty tokens\n");
-    return -1;
-  }
-
   COMMAND *cmd = allocate_memory(num_tokens);
   if (!cmd)
     return -1;
@@ -79,7 +74,7 @@ int parse(char *tokens[], COMMAND **cmd_ptr, size_t num_tokens) {
         cmd->append_output = 1;
       } else {
         fprintf(stderr, "parser: syntax error after '>>'\n");
-        free_memory(cmd);
+        free_struct_memory(cmd);
         return -1;
       }
 
@@ -88,7 +83,7 @@ int parse(char *tokens[], COMMAND **cmd_ptr, size_t num_tokens) {
         cmd->outfile = strdup(tokens[i++]);
       } else {
         fprintf(stderr, "parser: syntax error after '>'\n");
-        free_memory(cmd);
+        free_struct_memory(cmd);
         return -1;
       }
 
@@ -97,7 +92,7 @@ int parse(char *tokens[], COMMAND **cmd_ptr, size_t num_tokens) {
         cmd->infile = strdup(tokens[i++]);
       } else {
         fprintf(stderr, "parser: syntax error after '<'\n");
-        free_memory(cmd);
+        free_struct_memory(cmd);
         return -1;
       }
 
