@@ -6,11 +6,17 @@
 
 #include "job_control.h"
 
-int handle_job_control(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
-                       Process **proc_ptr, Job **job_ptr) {
+static int split_on_pipe(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
+                         int indx);
+static Job *create_job(Job **job_ptr, char *line_buffer, COMMAND *cmd);
+static Process *create_process(Process **proc_ptr, COMMAND *cmd);
+static char *get_raw_input(char *line_buffer);
+
+int handle_job_control(char *tokens[], char *line_buffer, size_t num_tokens,
+                       COMMAND **cmd_ptr, Process **proc_ptr, Job **job_ptr) {
   int i = 0;
 
-  while (tokens[i] != NULL) {
+  while (i < (int)num_tokens) {
     int split_indx = split_on_pipe(tokens, num_tokens, cmd_ptr, i);
     if (split_indx < 0) {
       return -1;
@@ -18,21 +24,27 @@ int handle_job_control(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
 
     *proc_ptr = create_process(proc_ptr, *cmd_ptr);
 
-    i = split_indx + 1;
+    if (split_indx < (int)num_tokens && strcmp(tokens[split_indx], "|") == 0) {
+      i = split_indx + 1;
+    } else {
+      break;
+    }
   }
 
-  *job_ptr = create_job(job_ptr);
+  *job_ptr = create_job(job_ptr, line_buffer, *cmd_ptr);
+  (*job_ptr)->first_process = *proc_ptr;
   return 0;
 }
 
-static Job *create_job(Job **job_ptr) {
+static Job *create_job(Job **job_ptr, char *line_buffer, COMMAND *cmd) {
   if (*job_ptr == NULL) {
     *job_ptr = calloc(1, sizeof(Job));
+    (*job_ptr)->command = get_raw_input(line_buffer);
+    (*job_ptr)->background = (cmd->background ? 1 : 0);
+    return *job_ptr;
   }
 
-  (*job_ptr)->next = create_job(&(*job_ptr)->next);
-
-  return *job_ptr;
+  (*job_ptr)->next = create_job(&(*job_ptr)->next, line_buffer, cmd);
 }
 
 static Process *create_process(Process **proc_ptr, COMMAND *cmd) {
@@ -43,7 +55,6 @@ static Process *create_process(Process **proc_ptr, COMMAND *cmd) {
   }
 
   (*proc_ptr)->next = create_process(&(*proc_ptr)->next, cmd);
-  return *proc_ptr;
 }
 
 static int split_on_pipe(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
@@ -66,7 +77,7 @@ static int split_on_pipe(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
   return indx;
 }
 
-char *get_raw_input(char *line_buffer) {
+static char *get_raw_input(char *line_buffer) {
   size_t length = strlen(line_buffer);
   char *raw_input = malloc(length + 1);
 
@@ -87,13 +98,3 @@ int get_num_procs(Job *job) {
 
   return num;
 }
-
-// Job *create_job(Job **job_ptr, char *line_buffer) {
-//   if (*job_ptr != NULL) {
-//     *job_ptr = calloc(1, sizeof(Job));
-//     // get raw user command
-//     (*job_ptr)->command = get_raw_input(line_buffer);
-//   }
-
-//   (*job_ptr)->next = create_job(&(*job_ptr)->next, line_buffer);
-// }

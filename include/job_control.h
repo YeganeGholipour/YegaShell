@@ -22,10 +22,8 @@ typedef struct Job {
   int background;
 } Job;
 
-int handle_job_control(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
-                       Process **proc_ptr, Job **job_ptr);
-
-char *get_raw_input(char *line_buffer);
+int handle_job_control(char *tokens[], char *line_buffer, size_t num_tokens,
+                       COMMAND **cmd_ptr, Process **proc_ptr, Job **job_ptr);
 
 int get_num_procs(Job *job);
 

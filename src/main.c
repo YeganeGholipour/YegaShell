@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "job_control.h"
 #include "executor.h"
 #include "expander.h"
 #include "parser.h"
@@ -57,8 +58,10 @@ int main(void) {
   char *tokens[MAXTOKENS];
   char *line_buffer = NULL;
   COMMAND *command_struct = NULL;
+  Process *process_struct = NULL;
+  Job *job_struct = NULL;
   size_t read;
-  int token_status, token_num, prompt_status, parser_status, executor_status;
+  int token_num, token_status, prompt_status, parser_status, executor_status, job_control_status;
 
   pid_t shell_pgid = getpid();
   if (setpgid(shell_pgid, shell_pgid) < 0) {
@@ -105,15 +108,15 @@ int main(void) {
     if (token_num == 0)
       continue;
 
-    /* PARSING PHASE */
-    parser_status = parse(tokens, &command_struct, token_num);
-    if (parser_status < 0) {
-      fprintf(stderr, "parser: error\n");
-      break;
+    /* JOB CONTROL PHASE */
+    job_control_status = handle_job_control(tokens, line_buffer, token_num, &command_struct, &process_struct, &job_struct);
+    if (job_control_status < 0) {
+      fprintf(stderr, "Error: job control\n");
+      continue;
     }
 
     /* EXECUTION PHASE */
-    executor_status = executor(command_struct);
+    executor_status = executor(job_struct);
     if (executor_status == -1) {
       fprintf(stderr, "failed to execute\n");
       exit(EXIT_FAILURE);

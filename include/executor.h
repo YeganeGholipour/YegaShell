@@ -2,7 +2,8 @@
 #define EXECUTOR_H
 
 #include "parser.h"
+#include "job_control.h"
 
-int executor(COMMAND *cmd);
+int executor(Job *job);
 
 #endif
