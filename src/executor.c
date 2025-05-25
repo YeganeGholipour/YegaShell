@@ -27,7 +27,6 @@ int last_exit_status = 0;
 
 int execute(Job *job) {
   int num_procs = get_num_procs(job);
-
   int(*pipes)[2] = NULL;
   if (num_procs > 1) {
     pipes = malloc(sizeof *pipes * (num_procs - 1));
@@ -36,13 +35,10 @@ int execute(Job *job) {
       return -1;
     }
   }
-
   int syncpipe[2];
-  int proc_num;
   Process *proc;
-  pid_t pgid = 0;
-  pid_t shell_pgid = getpid();
-
+  int proc_num;
+  pid_t pgid = 0, shell_pgid = getpid();
   pid_t *pids = malloc(sizeof *pids * num_procs);
   if (!pids) {
     perror("malloc for pids failed");
@@ -50,16 +46,7 @@ int execute(Job *job) {
     return -1;
   }
 
-  sigset_t mask_all, prev_mask;
-  sigfillset(&mask_all);
-
-  if (!job->background) {
-    sigaddset(&mask_all, SIGINT);
-    sigaddset(&mask_all, SIGQUIT);
-    sigaddset(&mask_all, SIGTSTP);
-  }
-  sigaddset(&mask_all, SIGCHLD);
-  sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
+  // (Ignore signals for now)
 
   if (pipe(syncpipe) < 0) {
     perror("pipe failed");
@@ -67,13 +54,13 @@ int execute(Job *job) {
     free(pids);
     return -1;
   }
-
   fcntl(syncpipe[0], F_SETFD, FD_CLOEXEC);
 
   for (proc = job->first_process, proc_num = 0; proc;
        proc = proc->next, proc_num++) {
     COMMAND *cmd = proc->cmd;
 
+    // Create a new pipe if this is not the last process
     if (proc_num < num_procs - 1) {
       if (pipe(pipes[proc_num]) < 0) {
         perror("pipe failed");
@@ -84,33 +71,25 @@ int execute(Job *job) {
     }
 
     pid_t pid = fork();
-
     if (pid < 0) {
       perror("fork failed");
       return -1;
     }
 
-    /******************************/
-    /* ------ CHILD PROCESS ------*/
-    /******************************/
     if (pid == 0) {
-      signal(SIGINT, SIG_DFL);
-      signal(SIGQUIT, SIG_DFL);
-      signal(SIGTSTP, SIG_DFL);
-      signal(SIGCHLD, SIG_DFL);
-      // TODO: add a SIGCHLD handler
+      // ── CHILD ──
 
       close(syncpipe[1]);
       char buf;
       read(syncpipe[0], &buf, 1);
 
+      // Join process group:
       if (setpgid(0, pgid) < 0) {
         perror("child: setpgid failed");
         exit(EXIT_FAILURE);
       }
 
-      /* STDIN SETUP*/
-
+      // ── SETUP STDIN ──
       if (cmd->infile) {
         int in_fd = open(cmd->infile, O_RDONLY);
         if (in_fd < 0) {
@@ -121,10 +100,10 @@ int execute(Job *job) {
         close(in_fd);
       } else if (proc_num > 0) {
         dup2(pipes[proc_num - 1][0], STDIN_FILENO);
+        close(pipes[proc_num - 1][0]);
       }
 
-      /* STDOUT SETUP */
-
+      // ── SETUP STDOUT ──
       if (cmd->outfile) {
         int flags =
             O_WRONLY | O_CREAT | (cmd->append_output ? O_APPEND : O_TRUNC);
@@ -137,13 +116,16 @@ int execute(Job *job) {
         close(out_fd);
       } else if (proc_num < num_procs - 1) {
         dup2(pipes[proc_num][1], STDOUT_FILENO);
+        close(pipes[proc_num][1]);
       }
 
+      // ── CLOSE ALL PIPE ENDS ──
       for (int i = 0; i < num_procs - 1; i++) {
         close(pipes[i][0]);
         close(pipes[i][1]);
       }
 
+      // ── EXEC ──
       char *full_path = get_full_path(cmd->argv[0]);
       if (!full_path) {
         fprintf(stderr, "%s: command not found\n", cmd->argv[0]);
@@ -159,76 +141,64 @@ int execute(Job *job) {
       expander(cmd, envp);
 
       execve(full_path, cmd->argv, envp);
-
       perror("execve failed");
-      for (int i = 0; envp[i]; i++)
-        free(envp[i]);
-      free(envp);
-      free(full_path);
-      close(syncpipe[0]);
       exit(EXIT_FAILURE);
     }
 
-    /**************************************/
-    /* ------ PARENT PROCESS IN LOOP -----*/
-    /**************************************/
-
+    // ── PARENT ──
     if (proc_num == 0) {
       pgid = pid;
       job->pgid = pgid;
     }
-
     if (setpgid(pid, pgid) < 0 && errno != EACCES && errno != EINVAL) {
       perror("parent: setpgid failed");
     }
-
     pids[proc_num] = pid;
+
+    // ── Immediately close pipe ends the parent doesn’t need ──
+    if (proc_num > 0) {
+      close(pipes[proc_num - 1][0]);
+    }
+    if (proc_num < num_procs - 1) {
+      close(pipes[proc_num][1]);
+    }
   }
 
-  /**********************************************/
-  /* ------ PARENT PROCESS OUTSIDE OF LOOP -----*/
-  /**********************************************/
-
+  // ── RELEASE CHILDREN FROM SYNC PIPE ──
   close(syncpipe[0]);
   for (int i = 0; i < num_procs; i++) {
     write(syncpipe[1], " ", 1);
   }
   close(syncpipe[1]);
 
+  // ── WAIT FOR CHILDREN ──
   if (!job->background) {
     if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
       perror("parent: tcsetpgrp failed");
 
-    sigprocmask(SIG_SETMASK, &prev_mask, NULL);
-
     int status;
-    for (int i = 0; i < num_procs; i++) {
-      if (waitpid(pids[i], &status, WUNTRACED) < 0) {
-        perror("waitpid failed");
-      }
-      if (i == num_procs - 1) {
+    pid_t w;
+
+    while ((w = waitpid(-job->pgid, &status, WUNTRACED)) > 0)
+      if (w == pids[num_procs - 1]) {
         if (WIFEXITED(status)) {
           last_exit_status = WEXITSTATUS(status);
         } else if (WIFSIGNALED(status)) {
           last_exit_status = 128 + WTERMSIG(status);
         }
-        // TODO: implement sigstop and sigcont
       }
-    }
 
+    // ── RECLAIM TERMINAL ──
     if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0) {
       perror("parent: couldn’t reclaim terminal");
     }
-  } else {
-    // background
-    sigprocmask(SIG_SETMASK, &prev_mask, NULL);
   }
 
+  // ── CLEANUP ──
   for (int j = 0; j < num_procs - 1; j++) {
     close(pipes[j][0]);
     close(pipes[j][1]);
   }
-
   free(pipes);
   free(pids);
 
@@ -328,27 +298,3 @@ char **build_envp(void) {
   return envp;
 }
 
-// if (!cmd->background) {
-//       if (tcsetpgrp(STDIN_FILENO, pid) < 0) {
-//         perror("parent: tcsetpgrp failed");
-//       }
-
-//       int status;
-//       if (waitpid(pid, &status, WUNTRACED) < 0) {
-//         perror("waitpid failed");
-//       }
-
-//       if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0) {
-//         perror("parent: couldn’t reclaim terminal");
-//       }
-
-//       if (WIFEXITED(status)) {
-//         last_exit_status = WEXITSTATUS(status);
-//       } else if (WIFSIGNALED(status)) {
-//         last_exit_status = 128 + WTERMSIG(status);
-//       } else if (WIFSTOPPED(status)) {
-//         last_exit_status = 128 + WSTOPSIG(status);
-//         fprintf(stderr, "\n[%d]+  Stopped\t%s\n", pid, cmd->argv[0]);
-//         /* track job if you want a proper job table */
-//       }
-//     }

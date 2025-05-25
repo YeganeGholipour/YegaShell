@@ -11,7 +11,8 @@ Builtin builtin_commands[] = {{"cd", cd_func},
                               {"help", help_func},
                               {"exit", exit_func},
                               {"pwd", pwd_func},
-                              {"export", export_func}};
+                              {"export", export_func},
+                              {NULL, NULL}};
 
 int cd_func(COMMAND *cmd) {
   const char *path;
@@ -29,9 +30,11 @@ int cd_func(COMMAND *cmd) {
     perror("cd");
     return 1;
   }
+  return 0;
 }
 
 int help_func(COMMAND *cmd) {
+  (void)cmd;
   printf("Yega Shell\n");
   printf("Type the name of the command, and hit enter.\n");
   printf("Use the man command for information on other programs.\n");
@@ -47,10 +50,12 @@ int exit_func(COMMAND *cmd) {
 }
 
 int pwd_func(COMMAND *cmd) {
+  (void)cmd;
   char *cwd = getcwd(NULL, 0);
   if (cwd) {
     printf("%s\n", cwd);
     free(cwd);
+    return 0;
   } else {
     perror("pwd");
     return 1;
