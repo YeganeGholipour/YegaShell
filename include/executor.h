@@ -4,6 +4,8 @@
 #include "parser.h"
 #include "job_control.h"
 
+extern int is_exit;
+
 int executor(Job *job);
 
 #endif

@@ -8,9 +8,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "job_control.h"
 #include "executor.h"
 #include "expander.h"
+#include "job_control.h"
 #include "parser.h"
 #include "tokenizer.h"
 
@@ -62,6 +62,7 @@ int main(void) {
   Job *job_struct = NULL;
   ssize_t read;
   int token_num, token_status, prompt_status, executor_status;
+  int exit_status = 0;
 
   pid_t shell_pgid = getpid();
   if (setpgid(shell_pgid, shell_pgid) < 0) {
@@ -88,10 +89,11 @@ int main(void) {
         continue;
       } else if (feof(stdin)) {
         fprintf(stderr, " Detected EOF (Ctrl+D), exiting...\n");
-        break;
+        break; // safe
       } else {
         perror("getline");
-        exit(EXIT_FAILURE);
+        exit_status = EXIT_FAILURE;
+        break;
       }
     }
     if (read > 0 && line_buffer[read - 1] == '\n')
@@ -109,7 +111,9 @@ int main(void) {
       continue;
 
     /* JOB CONTROL PHASE */
-    Job *new_job = handle_job_control(tokens, line_buffer, token_num, &command_struct, &process_struct, &job_struct);
+    Job *new_job =
+        handle_job_control(tokens, line_buffer, token_num, &command_struct,
+                           &process_struct, &job_struct);
     if (new_job == NULL) {
       fprintf(stderr, "Error: job control\n");
       continue;
@@ -119,7 +123,24 @@ int main(void) {
     executor_status = executor(new_job);
     if (executor_status == -1) {
       fprintf(stderr, "failed to execute\n");
-      exit(EXIT_FAILURE);
+      exit_status = EXIT_FAILURE;
+      free_job(new_job, &job_struct);
+      freeMemory(tokens, token_num);
+      new_job = NULL;
+      process_struct = NULL;
+      command_struct = NULL;
+      break;
+    }
+
+    if (is_exit != -1) {
+      exit_status = is_exit;
+      free_job(new_job, &job_struct);
+
+      freeMemory(tokens, token_num);
+      new_job = NULL;
+      process_struct = NULL;
+      command_struct = NULL;
+      break;
     }
 
     /* FREE MEMORY - LAST STEP */
@@ -132,5 +153,5 @@ int main(void) {
   }
 
   free(line_buffer);
-  return 0;
+  return exit_status;
 }

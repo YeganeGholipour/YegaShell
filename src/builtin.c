@@ -46,7 +46,7 @@ int exit_func(COMMAND *cmd) {
   int status = 0;
   if (cmd->argv[1])
     status = atoi(cmd->argv[1]);
-  exit(status);
+  return status;
 }
 
 int pwd_func(COMMAND *cmd) {

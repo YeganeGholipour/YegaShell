@@ -24,6 +24,7 @@ char **build_envp(void);
 Variable *variable_table[TABLESIZE] = {NULL};
 
 int last_exit_status = 0;
+int is_exit = -1;
 
 int execute(Job *job) {
   int num_procs = get_num_procs(job);
@@ -216,6 +217,8 @@ int executor(Job *job) {
     return execute(job);
   else {
     last_exit_status = builtin_commands[func_num].func(job->first_process->cmd);
+    if (strcmp(builtin_commands[func_num].name, "exit") == 0)
+      is_exit = last_exit_status;
     return 0;
   }
 }

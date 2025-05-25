@@ -26,7 +26,6 @@ char *handle_special_characters(char token_buffer[], char *p, int max_len);
 
 int prompt_and_read(char **line_buffer, ssize_t *read) {
   size_t buffsize;
-  *line_buffer = NULL;
   printf("YegaShell> ");
   *read = getline(line_buffer, &buffsize, stdin);
 
