@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <ctype.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -22,7 +24,7 @@ char *handle_single_quotes(char token_buffer[], char *p, int max_len);
 char *handle_double_quotes(char token_buffer[], char *p, int max_len);
 char *handle_special_characters(char token_buffer[], char *p, int max_len);
 
-int prompt_and_read(char **line_buffer, size_t *read) {
+int prompt_and_read(char **line_buffer, ssize_t *read) {
   size_t buffsize;
   *line_buffer = NULL;
   printf("YegaShell> ");
@@ -64,7 +66,6 @@ int tokenize_line(char *line, char *tokens[], int max_tokens, int max_len,
                   int *token_num) {
   char *cursor = line;
   char token_buffer[MAXLEN] = {0};
-  int memory_status;
 
   *token_num = 0;
 

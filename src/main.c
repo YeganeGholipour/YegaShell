@@ -60,8 +60,8 @@ int main(void) {
   COMMAND *command_struct = NULL;
   Process *process_struct = NULL;
   Job *job_struct = NULL;
-  size_t read;
-  int token_num, token_status, prompt_status, parser_status, executor_status, job_control_status;
+  ssize_t read;
+  int token_num, token_status, prompt_status, executor_status;
 
   pid_t shell_pgid = getpid();
   if (setpgid(shell_pgid, shell_pgid) < 0) {
@@ -109,22 +109,26 @@ int main(void) {
       continue;
 
     /* JOB CONTROL PHASE */
-    job_control_status = handle_job_control(tokens, line_buffer, token_num, &command_struct, &process_struct, &job_struct);
-    if (job_control_status < 0) {
+    Job *new_job = handle_job_control(tokens, line_buffer, token_num, &command_struct, &process_struct, &job_struct);
+    if (new_job == NULL) {
       fprintf(stderr, "Error: job control\n");
       continue;
     }
 
     /* EXECUTION PHASE */
-    executor_status = executor(job_struct);
+    executor_status = executor(new_job);
     if (executor_status == -1) {
       fprintf(stderr, "failed to execute\n");
       exit(EXIT_FAILURE);
     }
 
     /* FREE MEMORY - LAST STEP */
+    free_job(new_job, &job_struct);
+
     freeMemory(tokens, token_num);
-    free_struct_memory(command_struct);
+    new_job = NULL;
+    process_struct = NULL;
+    command_struct = NULL;
   }
 
   free(line_buffer);
