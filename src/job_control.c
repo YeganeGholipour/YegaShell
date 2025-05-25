@@ -12,14 +12,14 @@ static Job *create_job(Job **job_ptr, char *line_buffer, COMMAND *cmd);
 static Process *create_process(Process **proc_ptr, COMMAND *cmd);
 static char *get_raw_input(char *line_buffer);
 
-int handle_job_control(char *tokens[], char *line_buffer, size_t num_tokens,
-                       COMMAND **cmd_ptr, Process **proc_ptr, Job **job_ptr) {
+Job *handle_job_control(char *tokens[], char *line_buffer, size_t num_tokens,
+                        COMMAND **cmd_ptr, Process **proc_ptr, Job **job_head) {
   int i = 0;
 
   while (i < (int)num_tokens) {
     int split_indx = split_on_pipe(tokens, num_tokens, cmd_ptr, i);
     if (split_indx < 0) {
-      return -1;
+      return NULL;
     }
 
     *proc_ptr = create_process(proc_ptr, *cmd_ptr);
@@ -31,38 +31,88 @@ int handle_job_control(char *tokens[], char *line_buffer, size_t num_tokens,
     }
   }
 
-  *job_ptr = create_job(job_ptr, line_buffer, *cmd_ptr);
-  (*job_ptr)->first_process = *proc_ptr;
-  return 0;
+  Job *new_job = create_job(job_head, line_buffer, *cmd_ptr);
+  new_job->first_process = *proc_ptr;
+  return new_job;
 }
 
-static Job *create_job(Job **job_ptr, char *line_buffer, COMMAND *cmd) {
-  if (*job_ptr == NULL) {
-    *job_ptr = calloc(1, sizeof(Job));
-    (*job_ptr)->command = get_raw_input(line_buffer);
-    (*job_ptr)->background = (cmd->background ? 1 : 0);
-    return *job_ptr;
+static void free_process_list(Process *proc) {
+  Process *curr = proc;
+  Process *next;
+
+  while (curr) {
+    next = curr->next;
+    free_struct_memory(curr->cmd);
+    free(curr);
+    curr = next;
+  }
+}
+
+void free_job(Job *job, Job **head) {
+  Job *prev = NULL;
+  Job *curr = *head;
+
+  while (curr) {
+    if (curr == job) {
+      if (prev)
+        prev->next = curr->next;
+      else
+        *head = curr->next;
+
+      free_process_list(curr->first_process);
+      free(curr->command);
+      free(curr);
+      return;
+    }
+    prev = curr;
+    curr = curr->next;
+  }
+}
+
+static Job *create_job(Job **job_head_ptr, char *line_buffer, COMMAND *cmd) {
+  if (*job_head_ptr == NULL) {
+    *job_head_ptr = calloc(1, sizeof(Job));
+    if (!*job_head_ptr) {
+      perror("calloc for Job failed");
+      return NULL;
+    }
+    (*job_head_ptr)->command = get_raw_input(line_buffer);
+    (*job_head_ptr)->background = (cmd->background ? 1 : 0);
+
+    return *job_head_ptr;
   }
 
-  (*job_ptr)->next = create_job(&(*job_ptr)->next, line_buffer, cmd);
+  Job *curr = *job_head_ptr;
+  while (curr->next)
+    curr = curr->next;
+
+  curr->next = calloc(1, sizeof(Job));
+  if (!curr->next) {
+    perror("calloc for Job failed");
+    return NULL;
+  }
+  curr->next->command = get_raw_input(line_buffer);
+  curr->next->background = (cmd->background ? 1 : 0);
+
+  return curr->next;
 }
 
 static Process *create_process(Process **proc_ptr, COMMAND *cmd) {
   if (*proc_ptr == NULL) {
     *proc_ptr = calloc(1, sizeof(Process));
     (*proc_ptr)->cmd = cmd;
-    return *proc_ptr;
-  }
+  } else
+    (*proc_ptr)->next = create_process(&(*proc_ptr)->next, cmd);
 
-  (*proc_ptr)->next = create_process(&(*proc_ptr)->next, cmd);
+  return *proc_ptr;
 }
 
 static int split_on_pipe(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
                          int indx) {
-  char *process_command[num_tokens];
+  char *process_command[num_tokens+1];
   int j = 0;
 
-  while (indx < num_tokens && tokens[indx] != NULL &&
+  while (indx < (int)num_tokens && tokens[indx] != NULL &&
          strcmp(tokens[indx], "|") != 0) {
     process_command[j++] = tokens[indx++];
   }
