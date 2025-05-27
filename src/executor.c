@@ -36,7 +36,6 @@ int execute(Job *job) {
       return -1;
     }
   }
-  int syncpipe[2];
   Process *proc;
   int proc_num;
   pid_t pgid = 0, shell_pgid = getpid();
@@ -47,15 +46,24 @@ int execute(Job *job) {
     return -1;
   }
 
-  // (Ignore signals for now)
+  // TODO: install SIGCHLD handler later
 
-  if (pipe(syncpipe) < 0) {
-    perror("pipe failed");
-    free(pipes);
-    free(pids);
+  // Block Signals In Parent Until It has done its work
+  sigset_t parent_block_mask, prev_mask;
+  sigemptyset(&parent_block_mask);
+  sigaddset(&parent_block_mask, SIGCHLD);
+
+  if (!job->background) {
+    sigaddset(&parent_block_mask, SIGINT);
+    sigaddset(&parent_block_mask, SIGQUIT);
+    sigaddset(&parent_block_mask, SIGTSTP);
+  }
+
+  if (sigprocmask(SIG_BLOCK, &parent_block_mask, &prev_mask) < 0) {
+    perror("sigprocmask(block) before fork");
     return -1;
   }
-  fcntl(syncpipe[0], F_SETFD, FD_CLOEXEC);
+  printf("[main] signals blocked before fork. PID=%d\n", getpid());
 
   for (proc = job->first_process, proc_num = 0; proc;
        proc = proc->next, proc_num++) {
@@ -74,21 +82,40 @@ int execute(Job *job) {
     pid_t pid = fork();
     if (pid < 0) {
       perror("fork failed");
+      for (int i = 0; i < proc_num; i++) {
+        close(pipes[i][0]);
+        close(pipes[i][1]);
+      }
+      free(pipes);
+      free(pids);
       return -1;
     }
 
     if (pid == 0) {
       // ── CHILD ──
 
-      close(syncpipe[1]);
-      char buf;
-      read(syncpipe[0], &buf, 1);
+      // install the signal handlers
+      struct sigaction child_signals;
+      child_signals.sa_flags = SA_RESTART;
+      child_signals.sa_handler = SIG_DFL;
+      sigemptyset(&child_signals.sa_mask);
+      sigaction(SIGINT, &child_signals, NULL);
+      sigaction(SIGQUIT, &child_signals, NULL);
+      sigaction(SIGTSTP, &child_signals, NULL);
 
       // Join process group:
       if (setpgid(0, pgid) < 0) {
         perror("child: setpgid failed");
         exit(EXIT_FAILURE);
       }
+
+      // unblock the terminal generated signals
+      if (sigprocmask(SIG_SETMASK, &prev_mask, NULL) < 0) {
+        perror("sigprocmask(unblock) in child");
+        exit(1);
+      }
+
+      printf("  [child] signals unblocked. PID=%d\n", getpid());
 
       // ── SETUP STDIN ──
       if (cmd->infile) {
@@ -165,29 +192,57 @@ int execute(Job *job) {
     }
   }
 
-  // ── RELEASE CHILDREN FROM SYNC PIPE ──
-  close(syncpipe[0]);
-  for (int i = 0; i < num_procs; i++) {
-    write(syncpipe[1], " ", 1);
-  }
-  close(syncpipe[1]);
 
   // ── WAIT FOR CHILDREN ──
-  if (!job->background) {
+  if (job->background) {
+    if (sigprocmask(SIG_SETMASK, &prev_mask, NULL) < 0) {
+      perror("sigprocmask(restore) in parent (bg)");
+    }
+    printf("[parent] signals unblocked. PID=%d\n", getpid());
+  } else {
     if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
       perror("parent: tcsetpgrp failed");
+
+    // unblock signals in parent
+
+    if (sigprocmask(SIG_SETMASK, &prev_mask, NULL) < 0) {
+      perror("sigprocmask(restore) in parent (fg)");
+    }
+    printf("[parent] signals unblocked. PID=%d\n", getpid());
 
     int status;
     pid_t w;
 
-    while ((w = waitpid(-job->pgid, &status, WUNTRACED)) > 0)
-      if (w == pids[num_procs - 1]) {
-        if (WIFEXITED(status)) {
-          last_exit_status = WEXITSTATUS(status);
-        } else if (WIFSIGNALED(status)) {
-          last_exit_status = 128 + WTERMSIG(status);
+    while (1) {
+      w = waitpid(-job->pgid, &status, WUNTRACED);
+      if (w > 0) {
+        // child either exitted or is stopped
+        if (w == pids[num_procs - 1]) {
+          if (WIFEXITED(status)) {
+            last_exit_status = WEXITSTATUS(status);
+          } else if (WIFSIGNALED(status)) {
+            last_exit_status = 128 + WTERMSIG(status);
+          }
         }
+        continue;
       }
+      if (w == 0) {
+        // no more children
+        break;
+      }
+      if (w == -1) {
+        if (errno == EINTR) {
+          // some other signal interrupted waitpid
+          continue;
+        }
+        if (errno == ECHILD) {
+          // truly no children left
+          break;
+        }
+        perror("waitpid");
+        break;
+      }
+    }
 
     // ── RECLAIM TERMINAL ──
     if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0) {
@@ -300,4 +355,3 @@ char **build_envp(void) {
   envp[idx] = NULL;
   return envp;
 }
-

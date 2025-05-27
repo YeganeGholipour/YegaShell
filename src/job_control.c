@@ -109,7 +109,7 @@ static Process *create_process(Process **proc_ptr, COMMAND *cmd) {
 
 static int split_on_pipe(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
                          int indx) {
-  char *process_command[num_tokens+1];
+  char *process_command[num_tokens + 1];
   int j = 0;
 
   while (indx < (int)num_tokens && tokens[indx] != NULL &&
