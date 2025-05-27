@@ -24,10 +24,9 @@ char *handle_single_quotes(char token_buffer[], char *p, int max_len);
 char *handle_double_quotes(char token_buffer[], char *p, int max_len);
 char *handle_special_characters(char token_buffer[], char *p, int max_len);
 
-int prompt_and_read(char **line_buffer, ssize_t *read) {
-  size_t buffsize = 0;
+int prompt_and_read(char **line_buffer, ssize_t *read, size_t *buffsize) {
   printf("YegaShell> ");
-  *read = getline(line_buffer, &buffsize, stdin);
+  *read = getline(line_buffer, buffsize, stdin);
 
   if (*read == -1)
     return -1;

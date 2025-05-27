@@ -7,7 +7,7 @@
 #define MAXLEN 100
 #define SPECIALCHARLEN 4  
 
-int prompt_and_read(char **line_buffer, ssize_t *read);
+int prompt_and_read(char **line_buffer, ssize_t *read, size_t *buffsize);
 void print_tokens(char *tokens[], int token_num);
 int tokenize_line(char *line, char *tokens[], int max_tokens, int max_len,
                   int *token_num);

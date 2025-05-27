@@ -84,6 +84,7 @@ int main(void) {
   Process *process_struct = NULL;
   Job *job_struct = NULL;
   ssize_t read;
+  size_t buffsize = 0;
   int token_num, token_status, prompt_status, executor_status;
   int exit_status = 0;
 
@@ -105,7 +106,7 @@ int main(void) {
       interrupted = 0;
       continue;
     }
-    prompt_status = prompt_and_read(&line_buffer, &read);
+    prompt_status = prompt_and_read(&line_buffer, &read, &buffsize);
     if (prompt_status < 0) {
       if (errno == EINTR) {
         clearerr(stdin);
