@@ -157,7 +157,6 @@ int main(void) {
     }
 
     if (is_exit != -1) {
-      printf("exit happend\n");
       exit_status = is_exit;
       free_job(new_job, &job_struct);
 
@@ -177,7 +176,6 @@ int main(void) {
     command_struct = NULL;
   }
 
-  printf("free line_buffer\n");
   free(line_buffer);
   return exit_status;
 }
