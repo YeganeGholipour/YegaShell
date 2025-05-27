@@ -28,14 +28,29 @@ void sigquit_handler(int sig) {
   write(STDOUT_FILENO, "\n", 1);
 }
 
+void sigtstp_handler(int sig) {
+  (void)sig;
+  interrupted = 1;
+  write(STDOUT_FILENO, "\n", 1);
+}
+
 static void ignore_job_control_signals(void) {
-  signal(SIGTSTP, SIG_IGN);
-  signal(SIGTTIN, SIG_IGN);
-  signal(SIGTTOU, SIG_IGN);
+  struct sigaction sa;
+  sa.sa_flags = 0;
+  sa.sa_handler = SIG_IGN;
+  sigemptyset(&sa.sa_mask);
+  if (sigaction(SIGTTIN, &sa, NULL) == -1) {
+    perror("sigaction SIGTTIN");
+    exit(EXIT_FAILURE);
+  }
+  if (sigaction(SIGTTOU, &sa, NULL) == -1) {
+    perror("sigaction SIGTTOU");
+    exit(EXIT_FAILURE);
+  }
 }
 
 static void init_shell_signals(void) {
-  struct sigaction sa_sigint, sa_sigquit;
+  struct sigaction sa_sigint, sa_sigquit, sa_sigtstp;
 
   sa_sigint.sa_handler = sigint_handler;
   sa_sigint.sa_flags = 0;
@@ -52,6 +67,14 @@ static void init_shell_signals(void) {
     perror("sigaction SIGQUIT");
     exit(EXIT_FAILURE);
   }
+
+  sa_sigtstp.sa_handler = sigtstp_handler;
+  sa_sigtstp.sa_flags = 0;
+  sigemptyset(&sa_sigtstp.sa_mask);
+  if (sigaction(SIGTSTP, &sa_sigtstp, NULL) == -1) {
+    perror("sigaction SIGTSTP");
+    exit(EXIT_FAILURE);
+  }
 }
 
 int main(void) {
@@ -61,6 +84,7 @@ int main(void) {
   Process *process_struct = NULL;
   Job *job_struct = NULL;
   ssize_t read;
+  size_t buffsize = 0;
   int token_num, token_status, prompt_status, executor_status;
   int exit_status = 0;
 
@@ -82,7 +106,7 @@ int main(void) {
       interrupted = 0;
       continue;
     }
-    prompt_status = prompt_and_read(&line_buffer, &read);
+    prompt_status = prompt_and_read(&line_buffer, &read, &buffsize);
     if (prompt_status < 0) {
       if (errno == EINTR) {
         clearerr(stdin);
@@ -133,6 +157,7 @@ int main(void) {
     }
 
     if (is_exit != -1) {
+      printf("exit happend\n");
       exit_status = is_exit;
       free_job(new_job, &job_struct);
 
@@ -152,6 +177,7 @@ int main(void) {
     command_struct = NULL;
   }
 
+  printf("free line_buffer\n");
   free(line_buffer);
   return exit_status;
 }
