@@ -16,7 +16,7 @@
 #include "executor.h"
 #include "expander.h"
 
-int execute(Job *job);
+int execute(Job *job, Job **job_head);
 int is_buitin(Process *proc);
 char *get_full_path(const char *command);
 char **build_envp(void);
@@ -30,15 +30,21 @@ static int child_stdin_setup(COMMAND *cmd, int (*pipes)[2], int proc_num);
 static int child_stdout_setup(COMMAND *cmd, int (*pipes)[2], int proc_num,
                               int num_procs);
 static void handle_foreground_job(sigset_t *prev_list, Job *job, int num_procs,
-                                  int *pids, pid_t shell_pgid, pid_t pgid);
+                                  int *pids, pid_t shell_pgid, pid_t pgid,
+                                  Job **job_haed);
 static void handle_background_job(sigset_t *prev_mask);
+static void mark_process_status(Job *job, pid_t pid, int status);
+static int job_is_stopped(Job *job);
+static int job_is_completed(Job *job);
+static void do_job_notification(Job *job, Job **job_head);
+void wait_for_children(Job *job, int *pids, int num_procs);
 
 Variable *variable_table[TABLESIZE] = {NULL};
 
 int last_exit_status = 0;
 int is_exit = -1;
 
-int execute(Job *job) {
+int execute(Job *job, Job **job_head) {
   Process *proc;
   COMMAND *cmd;
   pid_t shell_pgid = getpid(), pgid = 0;
@@ -59,7 +65,6 @@ int execute(Job *job) {
     return -1;
   }
 
-  /* Create a new pipe if this is not the last process */
   for (int num = 0; num < num_procs - 1; num++) {
     if (pipe(pipes[num]) < 0) {
       perror("pipe failed");
@@ -71,7 +76,6 @@ int execute(Job *job) {
   // TODO: install SIGCHLD handler later
   // TODO: handle background jobs
 
-  /* Block Signals In Parent Until It has done its work */
   sigset_t parent_block_mask, prev_mask;
   if (block_parent_signals(&parent_block_mask, &prev_mask, job) < 0)
     return -1;
@@ -90,55 +94,50 @@ int execute(Job *job) {
     }
 
     if (pid == 0) {
-      // ── CHILD ──
 
-      // install the signal handlers
       install_child_signal_handler();
 
-      // Join process group:
       if (setpgid(0, pgid) < 0) {
         perror("child: setpgid failed");
         exit(EXIT_FAILURE);
       }
 
-      // unblock the terminal generated signals
       if (sigprocmask(SIG_SETMASK, &prev_mask, NULL) < 0) {
         perror("sigprocmask(unblock) in child");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
 
-      // ── SETUP STDIN ──
       if (child_stdin_setup(cmd, pipes, proc_num) < 0) {
         perror("failed to open input file");
         exit(EXIT_FAILURE);
       }
 
-      // ── SETUP STDOUT ──
       if (child_stdout_setup(cmd, pipes, proc_num, num_procs) < 0) {
         perror("failed to open output file");
         exit(EXIT_FAILURE);
       }
 
-      // ── CLOSE ALL PIPE ENDS ──
       close_pipe_ends(num_procs, pipes);
-
-      // ── EXEC ──
+      pid_t fg_before = tcgetpgrp(STDIN_FILENO);
+      fprintf(
+          stderr,
+          "[DEBUG‐CHILD] before exec: foreground PGID = %d (child PGID = %d)\n",
+          fg_before, getpgid(0));
       exec_command(cmd);
       perror("execve failed");
       exit(EXIT_FAILURE);
     }
 
-    // ── PARENT ──
     if (proc_num == 0) {
       pgid = pid;
       job->pgid = pgid;
     }
+    proc->pid = pid;
     if (setpgid(pid, pgid) < 0 && errno != EACCES && errno != EINVAL) {
       perror("parent: setpgid failed");
     }
     pids[proc_num] = pid;
 
-    // ── Immediately close pipe ends the parent doesn’t need ──
     if (proc_num > 0) {
       close(pipes[proc_num - 1][0]);
     }
@@ -147,35 +146,48 @@ int execute(Job *job) {
     }
   }
 
-  // ── WAIT FOR CHILDREN ──
   if (job->background) {
     handle_background_job(&prev_mask);
   } else
-    handle_foreground_job(&prev_mask, job, num_procs, pids, shell_pgid, pgid);
+    handle_foreground_job(&prev_mask, job, num_procs, pids, shell_pgid, pgid,
+                          job_head);
 
-  // ── CLEANUP ──
   close_pipe_ends(num_procs, pipes);
   free_pipes_and_pids(pipes, pids);
 
   return 0;
 }
 
-int executor(Job *job) {
+int executor(Job *job, Job **job_head) {
   if (!job->first_process) {
     fprintf(stderr, "Invalid command\n");
+    free_job(job, job_head);
     return -1;
   }
 
   int func_num = is_buitin(job->first_process);
-  if (func_num == -1)
-    return execute(job);
+
+  if (func_num == -1) {
+    int execute_status = execute(job, job_head);
+    if (execute_status < 0) {
+      free_job(job, job_head);
+      printf("job freed\n in execute_status < 0\n");
+    }
+
+    return execute_status;
+  }
+
   else {
     last_exit_status = builtin_commands[func_num].func(job->first_process->cmd);
-    if (strcmp(builtin_commands[func_num].name, "exit") == 0)
+    if (strcmp(builtin_commands[func_num].name, "exit") == 0) {
       is_exit = last_exit_status;
+      free_job(job, job_head);
+    }
     return 0;
   }
 }
+
+/******************** THE UTILITY FUNCTIONS ********************/
 
 static void handle_background_job(sigset_t *prev_mask) {
   if (sigprocmask(SIG_SETMASK, prev_mask, NULL) < 0) {
@@ -184,24 +196,44 @@ static void handle_background_job(sigset_t *prev_mask) {
 }
 
 static void handle_foreground_job(sigset_t *prev_list, Job *job, int num_procs,
-                                  int *pids, pid_t shell_pgid, pid_t pgid) {
+                                  int *pids, pid_t shell_pgid, pid_t pgid,
+                                  Job **job_head) {
 
-  // pass control to children
+  for (int i = 0; i < num_procs; i++) {
+    pid_t got = getpgid(pids[i]);
+    fprintf(stderr, "[DEBUG] child[%d] pid=%d pgid=%d (expected %d)\n", i,
+            pids[i], got, pgid);
+  }
+
   if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
     perror("parent: tcsetpgrp failed");
 
-  // unblock signals in parent
+  pid_t fg_after = tcgetpgrp(STDIN_FILENO);
+  fprintf(
+      stderr,
+      "[DEBUG‐PARENT] right before wait: foreground PGID = %d (expected %d)\n",
+      fg_after, pgid);
+
+  wait_for_children(job, pids, num_procs);
+
+  if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0) {
+    perror("parent: couldn't reclaim terminal");
+  }
+
+  do_job_notification(job, job_head);
+
   if (sigprocmask(SIG_SETMASK, prev_list, NULL) < 0) {
     perror("sigprocmask(restore) in parent (fg)");
   }
+}
 
+void wait_for_children(Job *job, int *pids, int num_procs) {
   int status;
   pid_t w;
 
   while (1) {
     w = waitpid(-job->pgid, &status, WUNTRACED);
     if (w > 0) {
-      // child either exitted or is stopped
       if (w == pids[num_procs - 1]) {
         if (WIFEXITED(status)) {
           last_exit_status = WEXITSTATUS(status);
@@ -209,30 +241,70 @@ static void handle_foreground_job(sigset_t *prev_list, Job *job, int num_procs,
           last_exit_status = 128 + WTERMSIG(status);
         }
       }
+
+      mark_process_status(job, w, status);
+
       continue;
     }
     if (w == 0) {
-      // no more children
       break;
     }
     if (w == -1) {
       if (errno == EINTR) {
-        // some other signal interrupted waitpid
         continue;
       }
       if (errno == ECHILD) {
-        // truly no children left
         break;
       }
       perror("waitpid");
       break;
     }
   }
+}
 
-  // ── RECLAIM TERMINAL ──
-  if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0) {
-    perror("parent: couldn’t reclaim terminal");
+static void format_job_info(Job *job, char *status) {
+  fprintf(stderr, "[%ld]  %s    %s\n", (long)job->pgid, status, job->command);
+}
+
+static void do_job_notification(Job *job, Job **job_head) {
+  if (job_is_stopped(job))
+    format_job_info(job, "Stopped");
+
+  else if (job_is_completed(job)) {
+    free_job(job, job_head);
   }
+}
+
+static int job_is_stopped(Job *job) {
+  Process *p;
+  for (p = job->first_process; p; p = p->next)
+    if (!p->stopped)
+      return 0;
+  return 1;
+}
+
+static int job_is_completed(Job *job) {
+  Process *p;
+  for (p = job->first_process; p; p = p->next)
+    if (!p->completed)
+      return 0;
+  return 1;
+}
+
+static void mark_process_status(Job *job, pid_t pid, int status) {
+  Process *p;
+  for (p = job->first_process; p; p = p->next) {
+    if (p->pid == pid) {
+      if (WIFEXITED(status) || WIFSIGNALED(status)) {
+        p->completed = 1;
+        p->status = status;
+      } else if (WIFSTOPPED(status))
+        p->stopped = 1;
+
+      return;
+    }
+  }
+  fprintf(stderr, "Warning: PID %d not found in job\n", pid);
 }
 
 static void exec_command(COMMAND *cmd) {
@@ -261,7 +333,6 @@ static int block_parent_signals(sigset_t *block_list, sigset_t *prev_list,
   if (!job->background) {
     sigaddset(block_list, SIGINT);
     sigaddset(block_list, SIGQUIT);
-    sigaddset(block_list, SIGTSTP);
   }
 
   if (sigprocmask(SIG_BLOCK, block_list, prev_list) < 0) {
@@ -292,6 +363,7 @@ static void install_child_signal_handler() {
   sigaction(SIGINT, &child_signals, NULL);
   sigaction(SIGQUIT, &child_signals, NULL);
   sigaction(SIGTSTP, &child_signals, NULL);
+  printf("child signal handler sigtstp installed\n");
 }
 
 static int child_stdin_setup(COMMAND *cmd, int (*pipes)[2], int proc_num) {

@@ -19,6 +19,7 @@ typedef struct Job {
   char *command;
   Process *first_process;
   pid_t pgid;
+  int job_id;
   int background;
 } Job;
 

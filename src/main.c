@@ -28,12 +28,6 @@ void sigquit_handler(int sig) {
   write(STDOUT_FILENO, "\n", 1);
 }
 
-void sigtstp_handler(int sig) {
-  (void)sig;
-  interrupted = 1;
-  write(STDOUT_FILENO, "\n", 1);
-}
-
 static void ignore_job_control_signals(void) {
   struct sigaction sa;
   sa.sa_flags = 0;
@@ -47,10 +41,14 @@ static void ignore_job_control_signals(void) {
     perror("sigaction SIGTTOU");
     exit(EXIT_FAILURE);
   }
+  if (sigaction(SIGTSTP, &sa, NULL) == -1) {
+    perror("sigaction SIGTSTP");
+    exit(EXIT_FAILURE);
+  }
 }
 
 static void init_shell_signals(void) {
-  struct sigaction sa_sigint, sa_sigquit, sa_sigtstp;
+  struct sigaction sa_sigint, sa_sigquit;
 
   sa_sigint.sa_handler = sigint_handler;
   sa_sigint.sa_flags = 0;
@@ -65,14 +63,6 @@ static void init_shell_signals(void) {
   sigemptyset(&sa_sigquit.sa_mask);
   if (sigaction(SIGQUIT, &sa_sigquit, NULL) == -1) {
     perror("sigaction SIGQUIT");
-    exit(EXIT_FAILURE);
-  }
-
-  sa_sigtstp.sa_handler = sigtstp_handler;
-  sa_sigtstp.sa_flags = 0;
-  sigemptyset(&sa_sigtstp.sa_mask);
-  if (sigaction(SIGTSTP, &sa_sigtstp, NULL) == -1) {
-    perror("sigaction SIGTSTP");
     exit(EXIT_FAILURE);
   }
 }
@@ -144,11 +134,10 @@ int main(void) {
     }
 
     /* EXECUTION PHASE */
-    executor_status = executor(new_job);
+    executor_status = executor(new_job, &job_struct);
     if (executor_status == -1) {
       fprintf(stderr, "failed to execute\n");
       exit_status = EXIT_FAILURE;
-      free_job(new_job, &job_struct);
       freeMemory(tokens, token_num);
       new_job = NULL;
       process_struct = NULL;
@@ -158,8 +147,6 @@ int main(void) {
 
     if (is_exit != -1) {
       exit_status = is_exit;
-      free_job(new_job, &job_struct);
-
       freeMemory(tokens, token_num);
       new_job = NULL;
       process_struct = NULL;
@@ -168,7 +155,7 @@ int main(void) {
     }
 
     /* FREE MEMORY - LAST STEP */
-    free_job(new_job, &job_struct);
+    // free_job(new_job, &job_struct);
 
     freeMemory(tokens, token_num);
     new_job = NULL;
