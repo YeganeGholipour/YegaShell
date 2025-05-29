@@ -101,12 +101,6 @@ int execute(Job *job, Job **job_head) {
       if (sigprocmask(SIG_SETMASK, &prev_mask, NULL) < 0) {
         perror("sigprocmask(unblock) in child");
         exit(EXIT_FAILURE);
-      } else {
-        char buf2[100];
-        int n = snprintf(buf2, sizeof(buf2),
-                         "DEBUG(child:%d): signals unblocked, exec soon\n",
-                         getpid());
-        write(STDERR_FILENO, buf2, n);
       }
 
       if (child_stdin_setup(cmd, pipes, proc_num) < 0) {
@@ -142,9 +136,6 @@ int execute(Job *job, Job **job_head) {
       close(pipes[proc_num][1]);
     }
   }
-
-  fprintf(stderr, "DEBUG: will do tcsetpgrp to pgid=%d (shell_pgid=%d)\n", pgid,
-          shell_pgid);
 
   if (job->background) {
     handle_background_job(&prev_mask);
@@ -243,8 +234,6 @@ void wait_for_children(Job *job, int *pids, int num_procs) {
           }
           if (WIFSTOPPED(status)) {
             p->stopped = 1;
-            fprintf(stderr, "DEBUG: ✓ child %d (PGID=%d) stopped by signal.\n",
-                    w, job->pgid);
             return;
           }
           if (WIFEXITED(status) || WIFSIGNALED(status)) {
