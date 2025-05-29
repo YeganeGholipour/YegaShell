@@ -6,6 +6,6 @@
 
 extern int is_exit;
 
-int executor(Job *job);
+int executor(Job *job, Job **job_head);
 
 #endif
