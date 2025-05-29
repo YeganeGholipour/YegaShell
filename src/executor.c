@@ -73,9 +73,6 @@ int execute(Job *job, Job **job_head) {
     }
   }
 
-  // TODO: install SIGCHLD handler later
-  // TODO: handle background jobs
-
   sigset_t parent_block_mask, prev_mask;
   if (block_parent_signals(&parent_block_mask, &prev_mask, job) < 0)
     return -1;
@@ -105,6 +102,8 @@ int execute(Job *job, Job **job_head) {
       if (sigprocmask(SIG_SETMASK, &prev_mask, NULL) < 0) {
         perror("sigprocmask(unblock) in child");
         exit(EXIT_FAILURE);
+      } else {
+        printf("unblocked signals in child\n");
       }
 
       if (child_stdin_setup(cmd, pipes, proc_num) < 0) {
@@ -118,11 +117,6 @@ int execute(Job *job, Job **job_head) {
       }
 
       close_pipe_ends(num_procs, pipes);
-      pid_t fg_before = tcgetpgrp(STDIN_FILENO);
-      fprintf(
-          stderr,
-          "[DEBUG‐CHILD] before exec: foreground PGID = %d (child PGID = %d)\n",
-          fg_before, getpgid(0));
       exec_command(cmd);
       perror("execve failed");
       exit(EXIT_FAILURE);
@@ -199,20 +193,8 @@ static void handle_foreground_job(sigset_t *prev_list, Job *job, int num_procs,
                                   int *pids, pid_t shell_pgid, pid_t pgid,
                                   Job **job_head) {
 
-  for (int i = 0; i < num_procs; i++) {
-    pid_t got = getpgid(pids[i]);
-    fprintf(stderr, "[DEBUG] child[%d] pid=%d pgid=%d (expected %d)\n", i,
-            pids[i], got, pgid);
-  }
-
   if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
     perror("parent: tcsetpgrp failed");
-
-  pid_t fg_after = tcgetpgrp(STDIN_FILENO);
-  fprintf(
-      stderr,
-      "[DEBUG‐PARENT] right before wait: foreground PGID = %d (expected %d)\n",
-      fg_after, pgid);
 
   wait_for_children(job, pids, num_procs);
 
@@ -355,14 +337,26 @@ static void close_pipe_ends(int num_procs, int (*pipes)[2]) {
   }
 }
 
+void sigtstp_handler(int sig) {
+  (void)sig;
+  printf("Process suspended by SIGTSTP\n");
+  signal(SIGTSTP, SIG_DFL);
+  raise(SIGTSTP);
+}
+
 static void install_child_signal_handler() {
-  struct sigaction child_signals;
-  child_signals.sa_flags = SA_RESTART;
+  struct sigaction child_signals, sigtstp_signal;
+  child_signals.sa_flags = 0;
   child_signals.sa_handler = SIG_DFL;
   sigemptyset(&child_signals.sa_mask);
   sigaction(SIGINT, &child_signals, NULL);
   sigaction(SIGQUIT, &child_signals, NULL);
-  sigaction(SIGTSTP, &child_signals, NULL);
+  // sigaction(SIGTSTP, &child_signals, NULL);
+
+  sigtstp_signal.sa_flags = 0;
+  sigtstp_signal.sa_handler = sigtstp_handler;
+  sigemptyset(&sigtstp_signal.sa_mask);
+  sigaction(SIGTSTP, &sigtstp_signal, NULL);
   printf("child signal handler sigtstp installed\n");
 }
 
