@@ -33,7 +33,6 @@ static void handle_foreground_job(sigset_t *prev_list, Job *job, int num_procs,
                                   int *pids, pid_t shell_pgid, pid_t pgid,
                                   Job **job_haed);
 static void handle_background_job(sigset_t *prev_mask);
-static void mark_process_status(Job *job, pid_t pid, int status);
 static int job_is_stopped(Job *job);
 static int job_is_completed(Job *job);
 static void do_job_notification(Job *job, Job **job_head);
@@ -103,7 +102,11 @@ int execute(Job *job, Job **job_head) {
         perror("sigprocmask(unblock) in child");
         exit(EXIT_FAILURE);
       } else {
-        printf("unblocked signals in child\n");
+        char buf2[100];
+        int n = snprintf(buf2, sizeof(buf2),
+                         "DEBUG(child:%d): signals unblocked, exec soon\n",
+                         getpid());
+        write(STDERR_FILENO, buf2, n);
       }
 
       if (child_stdin_setup(cmd, pipes, proc_num) < 0) {
@@ -139,6 +142,9 @@ int execute(Job *job, Job **job_head) {
       close(pipes[proc_num][1]);
     }
   }
+
+  fprintf(stderr, "DEBUG: will do tcsetpgrp to pgid=%d (shell_pgid=%d)\n", pgid,
+          shell_pgid);
 
   if (job->background) {
     handle_background_job(&prev_mask);
@@ -196,11 +202,20 @@ static void handle_foreground_job(sigset_t *prev_list, Job *job, int num_procs,
   if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
     perror("parent: tcsetpgrp failed");
 
+  pid_t current_fg = tcgetpgrp(STDIN_FILENO);
+  fprintf(stderr,
+          "DEBUG: after handing terminal, tcgetpgrp=%d (should == %d)\n",
+          current_fg, pgid);
+
   wait_for_children(job, pids, num_procs);
 
   if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0) {
     perror("parent: couldn't reclaim terminal");
   }
+
+  fprintf(stderr,
+          "DEBUG: shell reclaimed terminal, tcgetpgrp=%d (should == %d)\n",
+          tcgetpgrp(STDIN_FILENO), shell_pgid);
 
   do_job_notification(job, job_head);
 
@@ -216,30 +231,43 @@ void wait_for_children(Job *job, int *pids, int num_procs) {
   while (1) {
     w = waitpid(-job->pgid, &status, WUNTRACED);
     if (w > 0) {
-      if (w == pids[num_procs - 1]) {
-        if (WIFEXITED(status)) {
-          last_exit_status = WEXITSTATUS(status);
-        } else if (WIFSIGNALED(status)) {
-          last_exit_status = 128 + WTERMSIG(status);
+      Process *p;
+      for (p = job->first_process; p; p = p->next) {
+        if (p->pid == w) {
+          if (w == pids[num_procs - 1]) {
+            if (WIFEXITED(status)) {
+              last_exit_status = WEXITSTATUS(status);
+            } else if (WIFSIGNALED(status)) {
+              last_exit_status = 128 + WTERMSIG(status);
+            }
+          }
+          if (WIFSTOPPED(status)) {
+            p->stopped = 1;
+            fprintf(stderr, "DEBUG: ✓ child %d (PGID=%d) stopped by signal.\n",
+                    w, job->pgid);
+            return;
+          }
+          if (WIFEXITED(status) || WIFSIGNALED(status)) {
+            p->completed = 1;
+            p->status = status;
+            break;
+          }
         }
       }
-
-      mark_process_status(job, w, status);
-
       continue;
     }
     if (w == 0) {
-      break;
+      return;
     }
     if (w == -1) {
       if (errno == EINTR) {
         continue;
       }
       if (errno == ECHILD) {
-        break;
+        return;
       }
       perror("waitpid");
-      break;
+      return;
     }
   }
 }
@@ -271,22 +299,6 @@ static int job_is_completed(Job *job) {
     if (!p->completed)
       return 0;
   return 1;
-}
-
-static void mark_process_status(Job *job, pid_t pid, int status) {
-  Process *p;
-  for (p = job->first_process; p; p = p->next) {
-    if (p->pid == pid) {
-      if (WIFEXITED(status) || WIFSIGNALED(status)) {
-        p->completed = 1;
-        p->status = status;
-      } else if (WIFSTOPPED(status))
-        p->stopped = 1;
-
-      return;
-    }
-  }
-  fprintf(stderr, "Warning: PID %d not found in job\n", pid);
 }
 
 static void exec_command(COMMAND *cmd) {
@@ -337,27 +349,23 @@ static void close_pipe_ends(int num_procs, int (*pipes)[2]) {
   }
 }
 
-void sigtstp_handler(int sig) {
-  (void)sig;
-  printf("Process suspended by SIGTSTP\n");
-  signal(SIGTSTP, SIG_DFL);
-  raise(SIGTSTP);
-}
+static void install_child_signal_handler(void) {
+  struct sigaction sa;
+  sa.sa_flags = 0;
+  sa.sa_handler = SIG_DFL;
+  sigemptyset(&sa.sa_mask);
 
-static void install_child_signal_handler() {
-  struct sigaction child_signals, sigtstp_signal;
-  child_signals.sa_flags = 0;
-  child_signals.sa_handler = SIG_DFL;
-  sigemptyset(&child_signals.sa_mask);
-  sigaction(SIGINT, &child_signals, NULL);
-  sigaction(SIGQUIT, &child_signals, NULL);
-  // sigaction(SIGTSTP, &child_signals, NULL);
+  // Make sure child uses default for SIGINT, SIGQUIT, SIGTSTP
+  sigaction(SIGINT, &sa, NULL);
+  sigaction(SIGQUIT, &sa, NULL);
+  sigaction(SIGTSTP, &sa, NULL);
 
-  sigtstp_signal.sa_flags = 0;
-  sigtstp_signal.sa_handler = sigtstp_handler;
-  sigemptyset(&sigtstp_signal.sa_mask);
-  sigaction(SIGTSTP, &sigtstp_signal, NULL);
-  printf("child signal handler sigtstp installed\n");
+  // Optional debug:
+  char buf[100];
+  int len = snprintf(buf, sizeof(buf),
+                     "DEBUG(child:%d): PGID=%d, SIGTSTP=SIG_DFL now\n",
+                     getpid(), getpgid(0));
+  write(STDERR_FILENO, buf, len);
 }
 
 static int child_stdin_setup(COMMAND *cmd, int (*pipes)[2], int proc_num) {

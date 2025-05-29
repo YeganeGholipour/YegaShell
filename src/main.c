@@ -87,7 +87,17 @@ int main(void) {
     perror("shell: tcsetpgrp failed");
   }
 
+  fprintf(stderr, "DEBUG: shell PID=%d, PGID=%d, tcgetpgrp=%d\n", shell_pgid,
+          getpgid(shell_pgid), tcgetpgrp(STDIN_FILENO));
+
   ignore_job_control_signals();
+  struct sigaction check_sa;
+  sigaction(SIGTSTP, NULL, &check_sa);
+  if (check_sa.sa_handler != SIG_IGN) {
+    fprintf(stderr, "ERROR: SIGTSTP is not ignored in shell!\n");
+    exit(1);
+  }
+
   init_shell_signals();
 
   /* PROMPT PHASE */
