@@ -19,7 +19,9 @@ typedef struct Job {
   char *command;
   Process *first_process;
   pid_t pgid;
+  pid_t *pids;
   int job_id;
+  int num_procs;
   int background;
 } Job;
 
@@ -29,5 +31,6 @@ void free_job(Job *job, Job **head);
 int get_num_procs(Job *job);
 void free_all_jobs(Job **head);
 void kill_jobs(Job **job_head);
+Job *find_job(Job *job, Job **job_head);
 
 #endif
