@@ -81,6 +81,7 @@ void free_job(Job *job, Job **head) {
 
       free_process_list(curr->first_process);
       free(curr->command);
+      free(curr->pids);
       free(curr);
       return;
     }
@@ -167,4 +168,39 @@ int get_num_procs(Job *job) {
     num++;
 
   return num;
+}
+
+Job *find_job(Job *job, Job **job_head) {
+  char **argv = job->first_process->cmd->argv;
+  long job_num = -1;
+
+  if (argv[1] == NULL) {
+    Job *curr = *job_head;
+    Job *last = NULL;
+    while (curr) {
+      last = curr;
+      curr = curr->next;
+    }
+    return last;
+  }
+
+  if (argv[1][0] != '%' || argv[1][1] == '\0') {
+    return NULL;
+  }
+
+  char *endptr;
+  job_num = strtol(argv[1] + 1, &endptr, 10);
+
+  if (*endptr != '\0' || job_num <= 0) {
+    return NULL;
+  }
+
+  Job *curr = *job_head;
+  while (curr) {
+    if ((long)curr->pgid == job_num) {
+      return curr;
+    }
+    curr = curr->next;
+  }
+  return NULL;
 }

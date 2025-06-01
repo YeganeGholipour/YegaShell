@@ -21,20 +21,13 @@ int is_buitin(Process *proc);
 char *get_full_path(const char *command);
 char **build_envp(void);
 static void exec_command(COMMAND *cmd);
-static int block_parent_signals(sigset_t *block_list, sigset_t *prev_list,
-                                Job *job);
-static void free_pipes_and_pids(int (*pipes)[2], pid_t *pids);
+int block_parent_signals(sigset_t *block_list, sigset_t *prev_list, Job *job);
+static void free_pipes_and_pids(int (*pipes)[2]);
 static void close_pipe_ends(int num_procs, int (*pipes)[2]);
 static void install_child_signal_handler();
 static int child_stdin_setup(COMMAND *cmd, int (*pipes)[2], int proc_num);
 static int child_stdout_setup(COMMAND *cmd, int (*pipes)[2], int proc_num,
                               int num_procs);
-static void handle_foreground_job(sigset_t *prev_list, Job *job, int num_procs,
-                                  int *pids, pid_t shell_pgid, pid_t pgid,
-                                  Job **job_haed);
-static void handle_background_job(sigset_t *prev_mask);
-static int job_is_stopped(Job *job);
-static int job_is_completed(Job *job);
 static void do_job_notification(Job *job, Job **job_head);
 void wait_for_children(Job *job, int *pids, int num_procs);
 void drain_remaining_statuses(Job *job);
@@ -48,27 +41,28 @@ int execute(Job *job, Job **job_head) {
   Process *proc;
   COMMAND *cmd;
   pid_t shell_pgid = getpid(), pgid = 0;
-  int num_procs = get_num_procs(job);
+  job->num_procs = get_num_procs(job);
+  int local_num_procs = job->num_procs;
   int proc_num;
   int(*pipes)[2] = NULL;
 
-  pipes = malloc(sizeof *pipes * (num_procs - 1));
+  pipes = malloc(sizeof *pipes * (job->num_procs - 1));
   if (!pipes) {
     perror("malloc for pipes failed");
     return -1;
   }
 
-  pid_t *pids = malloc(sizeof *pids * num_procs);
-  if (!pids) {
+  job->pids = malloc(sizeof(pid_t) * job->num_procs);
+  if (!job->pids) {
     perror("malloc for pids failed");
     free(pipes);
     return -1;
   }
 
-  for (int num = 0; num < num_procs - 1; num++) {
+  for (int num = 0; num < job->num_procs - 1; num++) {
     if (pipe(pipes[num]) < 0) {
       perror("pipe failed");
-      free_pipes_and_pids(pipes, pids);
+      free_pipes_and_pids(pipes);
       return -1;
     }
   }
@@ -85,8 +79,8 @@ int execute(Job *job, Job **job_head) {
 
     if (pid < 0) {
       perror("fork failed");
-      close_pipe_ends(num_procs, pipes);
-      free_pipes_and_pids(pipes, pids);
+      close_pipe_ends(job->num_procs, pipes);
+      free_pipes_and_pids(pipes);
       return -1;
     }
 
@@ -109,12 +103,12 @@ int execute(Job *job, Job **job_head) {
         exit(EXIT_FAILURE);
       }
 
-      if (child_stdout_setup(cmd, pipes, proc_num, num_procs) < 0) {
+      if (child_stdout_setup(cmd, pipes, proc_num, job->num_procs) < 0) {
         perror("failed to open output file");
         exit(EXIT_FAILURE);
       }
 
-      close_pipe_ends(num_procs, pipes);
+      close_pipe_ends(job->num_procs, pipes);
       exec_command(cmd);
       perror("execve failed");
       exit(EXIT_FAILURE);
@@ -128,12 +122,12 @@ int execute(Job *job, Job **job_head) {
     if (setpgid(pid, pgid) < 0 && errno != EACCES && errno != EINVAL) {
       perror("parent: setpgid failed");
     }
-    pids[proc_num] = pid;
+    job->pids[proc_num] = pid;
 
     if (proc_num > 0) {
       close(pipes[proc_num - 1][0]);
     }
-    if (proc_num < num_procs - 1) {
+    if (proc_num < job->num_procs - 1) {
       close(pipes[proc_num][1]);
     }
   }
@@ -141,11 +135,10 @@ int execute(Job *job, Job **job_head) {
   if (job->background) {
     handle_background_job(&prev_mask);
   } else
-    handle_foreground_job(&prev_mask, job, num_procs, pids, shell_pgid, pgid,
-                          job_head);
+    handle_foreground_job(&prev_mask, job, shell_pgid, job_head);
 
-  close_pipe_ends(num_procs, pipes);
-  free_pipes_and_pids(pipes, pids);
+  close_pipe_ends(local_num_procs, pipes);
+  free_pipes_and_pids(pipes);
 
   return 0;
 }
@@ -170,7 +163,7 @@ int executor(Job *job, Job **job_head) {
   }
 
   else {
-    last_exit_status = builtin_commands[func_num].func(job->first_process->cmd);
+    last_exit_status = builtin_commands[func_num].func(job, job_head);
     if (strcmp(builtin_commands[func_num].name, "exit") == 0) {
       is_exit = last_exit_status;
     }
@@ -180,20 +173,19 @@ int executor(Job *job, Job **job_head) {
 
 /******************** THE UTILITY FUNCTIONS ********************/
 
-static void handle_background_job(sigset_t *prev_mask) {
+void handle_background_job(sigset_t *prev_mask) {
   if (sigprocmask(SIG_SETMASK, prev_mask, NULL) < 0) {
     perror("sigprocmask(restore) in parent (bg)");
   }
 }
 
-static void handle_foreground_job(sigset_t *prev_list, Job *job, int num_procs,
-                                  int *pids, pid_t shell_pgid, pid_t pgid,
-                                  Job **job_head) {
+void handle_foreground_job(sigset_t *prev_list, Job *job, pid_t shell_pgid,
+                           Job **job_head) {
 
-  if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
+  if (tcsetpgrp(STDIN_FILENO, job->pgid) < 0)
     perror("parent: tcsetpgrp failed");
 
-  wait_for_children(job, pids, num_procs);
+  wait_for_children(job, job->pids, job->num_procs);
 
   drain_remaining_statuses(job);
 
@@ -297,28 +289,34 @@ void drain_remaining_statuses(Job *job) {
 }
 
 static void do_job_notification(Job *job, Job **job_head) {
-  if (job_is_stopped(job))
-    format_job_info(job, "Stopped");
-
-  else if (job_is_completed(job)) {
+  if (job_is_completed(job)) {
     free_job(job, job_head);
   }
+  else if (job_is_stopped(job))
+    format_job_info(job, "Stopped");
 }
 
-static int job_is_stopped(Job *job) {
+int job_is_stopped(Job *job) {
   Process *p;
   for (p = job->first_process; p; p = p->next)
-    if (!p->stopped)
+    if (!p->stopped && !p->completed)
       return 0;
   return 1;
 }
 
-static int job_is_completed(Job *job) {
+int job_is_completed(Job *job) {
   Process *p;
   for (p = job->first_process; p; p = p->next)
     if (!p->completed)
       return 0;
   return 1;
+}
+
+void clear_stopped_mark(Job *job) {
+  Process *p;
+  for (p = job->first_process; p; p = p->next) {
+    p->stopped = 0;
+  }
 }
 
 static void exec_command(COMMAND *cmd) {
@@ -339,8 +337,7 @@ static void exec_command(COMMAND *cmd) {
   execve(full_path, cmd->argv, envp);
 }
 
-static int block_parent_signals(sigset_t *block_list, sigset_t *prev_list,
-                                Job *job) {
+int block_parent_signals(sigset_t *block_list, sigset_t *prev_list, Job *job) {
   sigemptyset(block_list);
   sigaddset(block_list, SIGCHLD);
 
@@ -358,10 +355,7 @@ static int block_parent_signals(sigset_t *block_list, sigset_t *prev_list,
   return 0;
 }
 
-static void free_pipes_and_pids(int (*pipes)[2], pid_t *pids) {
-  free(pipes);
-  free(pids);
-}
+static void free_pipes_and_pids(int (*pipes)[2]) { free(pipes); }
 
 static void close_pipe_ends(int num_procs, int (*pipes)[2]) {
   for (int i = 0; i < num_procs - 1; i++) {
