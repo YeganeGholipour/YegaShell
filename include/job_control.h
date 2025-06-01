@@ -27,5 +27,7 @@ Job *handle_job_control(char *tokens[], char *line_buffer, size_t num_tokens,
                         COMMAND **cmd_ptr, Process **proc_ptr, Job **job_head);
 void free_job(Job *job, Job **head);
 int get_num_procs(Job *job);
+void free_all_jobs(Job **head);
+void kill_jobs(Job **job_head);
 
 #endif

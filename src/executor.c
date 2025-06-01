@@ -37,6 +37,7 @@ static int job_is_stopped(Job *job);
 static int job_is_completed(Job *job);
 static void do_job_notification(Job *job, Job **job_head);
 void wait_for_children(Job *job, int *pids, int num_procs);
+void drain_remaining_statuses(Job *job);
 
 Variable *variable_table[TABLESIZE] = {NULL};
 
@@ -172,7 +173,6 @@ int executor(Job *job, Job **job_head) {
     last_exit_status = builtin_commands[func_num].func(job->first_process->cmd);
     if (strcmp(builtin_commands[func_num].name, "exit") == 0) {
       is_exit = last_exit_status;
-      free_job(job, job_head);
     }
     return 0;
   }
@@ -199,6 +199,8 @@ static void handle_foreground_job(sigset_t *prev_list, Job *job, int num_procs,
           current_fg, pgid);
 
   wait_for_children(job, pids, num_procs);
+
+  drain_remaining_statuses(job);
 
   if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0) {
     perror("parent: couldn't reclaim terminal");
@@ -265,6 +267,44 @@ static void format_job_info(Job *job, char *status) {
   fprintf(stderr, "[%ld]  %s    %s\n", (long)job->pgid, status, job->command);
 }
 
+void drain_remaining_statuses(Job *job) {
+  pid_t w;
+  int status;
+
+  while ((w = waitpid(-job->pgid, &status, WNOHANG | WUNTRACED))) {
+    if (w > 0) {
+      Process *p;
+      for (p = job->first_process; p; p = p->next) {
+        if (p->pid == w) {
+          if (WIFSTOPPED(status)) {
+            p->stopped = 1;
+            break;
+          }
+          if (WIFEXITED(status) || WIFSIGNALED(status)) {
+            p->completed = 1;
+            p->status = status;
+            break;
+          }
+        }
+      }
+      continue;
+
+    } else if (w == 0)
+      return;
+
+    else if (w == -1) {
+      if (errno == EINTR) {
+        continue;
+      }
+      if (errno == ECHILD) {
+        return;
+      }
+      perror("waitpid");
+      return;
+    }
+  }
+}
+
 static void do_job_notification(Job *job, Job **job_head) {
   if (job_is_stopped(job))
     format_job_info(job, "Stopped");
@@ -316,6 +356,7 @@ static int block_parent_signals(sigset_t *block_list, sigset_t *prev_list,
   if (!job->background) {
     sigaddset(block_list, SIGINT);
     sigaddset(block_list, SIGQUIT);
+    sigaddset(block_list, SIGTSTP);
   }
 
   if (sigprocmask(SIG_BLOCK, block_list, prev_list) < 0) {

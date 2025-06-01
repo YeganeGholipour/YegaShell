@@ -163,6 +163,8 @@ int main(void) {
     command_struct = NULL;
   }
 
+  kill_jobs(&job_struct);
+  free_all_jobs(&job_struct);
   free(line_buffer);
   return exit_status;
 }

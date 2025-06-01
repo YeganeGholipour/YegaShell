@@ -1,3 +1,4 @@
+#include <signal.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +35,25 @@ Job *handle_job_control(char *tokens[], char *line_buffer, size_t num_tokens,
   Job *new_job = create_job(job_head, line_buffer, *cmd_ptr);
   new_job->first_process = *proc_ptr;
   return new_job;
+}
+
+void kill_jobs(Job **job_head) {
+  for (Job *j = *job_head; j; j = j->next) {
+    kill(-j->pgid, SIGHUP);
+    kill(-j->pgid, SIGCONT);
+    kill(-j->pgid, SIGTERM);
+  }
+}
+
+void free_all_jobs(Job **head) {
+  Job *curr = *head;
+  Job *next;
+
+  while (curr) {
+    next = curr->next;
+    free_job(curr, head);
+    curr = next;
+  }
 }
 
 static void free_process_list(Process *proc) {
