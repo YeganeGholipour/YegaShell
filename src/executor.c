@@ -193,11 +193,6 @@ static void handle_foreground_job(sigset_t *prev_list, Job *job, int num_procs,
   if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
     perror("parent: tcsetpgrp failed");
 
-  pid_t current_fg = tcgetpgrp(STDIN_FILENO);
-  fprintf(stderr,
-          "DEBUG: after handing terminal, tcgetpgrp=%d (should == %d)\n",
-          current_fg, pgid);
-
   wait_for_children(job, pids, num_procs);
 
   drain_remaining_statuses(job);
@@ -205,10 +200,6 @@ static void handle_foreground_job(sigset_t *prev_list, Job *job, int num_procs,
   if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0) {
     perror("parent: couldn't reclaim terminal");
   }
-
-  fprintf(stderr,
-          "DEBUG: shell reclaimed terminal, tcgetpgrp=%d (should == %d)\n",
-          tcgetpgrp(STDIN_FILENO), shell_pgid);
 
   do_job_notification(job, job_head);
 
@@ -385,17 +376,9 @@ static void install_child_signal_handler(void) {
   sa.sa_handler = SIG_DFL;
   sigemptyset(&sa.sa_mask);
 
-  // Make sure child uses default for SIGINT, SIGQUIT, SIGTSTP
   sigaction(SIGINT, &sa, NULL);
   sigaction(SIGQUIT, &sa, NULL);
   sigaction(SIGTSTP, &sa, NULL);
-
-  // Optional debug:
-  char buf[100];
-  int len = snprintf(buf, sizeof(buf),
-                     "DEBUG(child:%d): PGID=%d, SIGTSTP=SIG_DFL now\n",
-                     getpid(), getpgid(0));
-  write(STDERR_FILENO, buf, len);
 }
 
 static int child_stdin_setup(COMMAND *cmd, int (*pipes)[2], int proc_num) {
