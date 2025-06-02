@@ -61,13 +61,30 @@ int parse(char *tokens[], COMMAND **cmd_ptr, size_t num_tokens) {
     return -1;
   *cmd_ptr = cmd;
 
-  size_t i = 0, argc = 0;
+  // check if the first token is a valid
+  char *first_tok = tokens[0];
+  if (!is_special_char(first_tok) && !is_background(first_tok) &&
+      !is_append_output(first_tok) && !is_output_redirection(first_tok) &&
+      !is_input_redirection(first_tok)) {
+    cmd->argv[0] = strdup(first_tok);
+  } else {
+    fprintf(stderr, "parser: syntax error, first token is invalid\n");
+    free_struct_memory(cmd);
+    return -1;
+  }
+
+  size_t i = 1, argc = 1;
   while (i < num_tokens) {
     char *tok = tokens[i++];
 
     if (is_background(tok)) {
-      cmd->background = 1;
-
+      if (i == num_tokens)
+        cmd->background = 1;
+      else {
+        fprintf(stderr, "parser: syntax error, '&' must be the last token\n");
+        free_struct_memory(cmd);
+        return -1;
+      }
     } else if (is_append_output(tok)) {
       if (i < num_tokens && !is_special_char(tokens[i])) {
         cmd->outfile = strdup(tokens[i++]);
@@ -120,4 +137,62 @@ void print_command_struct(COMMAND *cmd) {
   printf("outfile: %s\n", cmd->outfile ? cmd->outfile : "(null)");
   printf("append_output: %d\n", cmd->append_output);
   printf("background: %d\n", cmd->background);
+}
+
+int split_on_pipe(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
+                  int indx) {
+  char *process_command[num_tokens + 1];
+  int j = 0;
+
+  while (indx < (int)num_tokens && tokens[indx] != NULL &&
+         strcmp(tokens[indx], "|") != 0) {
+    process_command[j++] = tokens[indx++];
+  }
+  process_command[j] = NULL;
+
+  int parser_status = parse(process_command, cmd_ptr, j);
+  if (parser_status < 0) {
+    fprintf(stderr, "parser: error\n");
+    return -1;
+  }
+
+  return indx;
+}
+
+char *get_raw_input(char *line_buffer) {
+  size_t length = strlen(line_buffer);
+  char *raw_input = NULL;
+
+  if (length > 0 && line_buffer[length - 1] == '&') {
+    raw_input = malloc(length);
+    if (raw_input == NULL) {
+      perror("malloc failed");
+      return NULL;
+    }
+    strncpy(raw_input, line_buffer, length - 1);
+    raw_input[length - 1] = '\0';
+  } else {
+    raw_input = malloc(length + 1);
+    if (raw_input == NULL) {
+      perror("malloc failed");
+      return NULL;
+    }
+    strcpy(raw_input, line_buffer);
+  }
+
+  return raw_input;
+}
+
+int is_background_char_valid(char *tokens[], size_t num_tokens) {
+  for (size_t i = 0; i < num_tokens; i++) {
+    if (strcmp(tokens[i], "&") == 0) {
+      if (i == num_tokens - 1) {
+        return 1;
+      } else {
+        fprintf(stderr, "parser: error on '&' character: must be last\n");
+        return 0;
+      }
+    }
+  }
+  return 1;
 }

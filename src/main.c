@@ -78,9 +78,9 @@ static void init_shell_signals(void) {
     exit(EXIT_FAILURE);
   }
 
-  sa_sigquit.sa_handler = sigchld_handler;
-  sa_sigquit.sa_flags = SA_RESTART;
-  sigemptyset(&sa_sigquit.sa_mask);
+  sa_sigchld.sa_handler = sigchld_handler;
+  sa_sigchld.sa_flags = SA_RESTART;
+  sigemptyset(&sa_sigchld.sa_mask);
   if (sigaction(SIGCHLD, &sa_sigchld, NULL) == -1) {
     perror("sigaction SIGCHLD");
     exit(EXIT_FAILURE);
@@ -120,7 +120,6 @@ int main(void) {
       child_changed = 0;
       mark_bg_jobs(&job_struct, pending_bg_jobs, pending_indx);
       notify_bg_jobs(&job_struct);
-      
     }
     prompt_status = prompt_and_read(&line_buffer, &read, &buffsize);
     if (prompt_status < 0) {
@@ -145,6 +144,7 @@ int main(void) {
         tokenize_line(line_buffer, tokens, MAXTOKENS, MAXLEN, &token_num);
     if (token_status < 0) {
       fprintf(stderr, "Error: tokenizing input\n");
+      freeMemory(tokens, token_num);
       continue;
     }
     if (token_num == 0)
@@ -156,6 +156,7 @@ int main(void) {
                            &process_struct, &job_struct);
     if (new_job == NULL) {
       fprintf(stderr, "Error: job control\n");
+      freeMemory(tokens, token_num);
       continue;
     }
 

@@ -9,11 +9,8 @@
 
 #include "job_control.h"
 
-static int split_on_pipe(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
-                         int indx);
 static Job *create_job(Job **job_ptr, char *line_buffer, COMMAND *cmd);
 static Process *create_process(Process **proc_ptr, COMMAND *cmd);
-static char *get_raw_input(char *line_buffer);
 
 int pending_indx = 0;
 struct Pending pending_bg_jobs[256] = {0};
@@ -21,6 +18,10 @@ struct Pending pending_bg_jobs[256] = {0};
 Job *handle_job_control(char *tokens[], char *line_buffer, size_t num_tokens,
                         COMMAND **cmd_ptr, Process **proc_ptr, Job **job_head) {
   int i = 0;
+
+  // see if bakground job character is valid
+  if (is_background_char_valid(tokens, num_tokens) == 0)
+    return NULL;
 
   while (i < (int)num_tokens) {
     int split_indx = split_on_pipe(tokens, num_tokens, cmd_ptr, i);
@@ -133,39 +134,6 @@ static Process *create_process(Process **proc_ptr, COMMAND *cmd) {
   return *proc_ptr;
 }
 
-static int split_on_pipe(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
-                         int indx) {
-  char *process_command[num_tokens + 1];
-  int j = 0;
-
-  while (indx < (int)num_tokens && tokens[indx] != NULL &&
-         strcmp(tokens[indx], "|") != 0) {
-    process_command[j++] = tokens[indx++];
-  }
-  process_command[j] = NULL;
-
-  int parser_status = parse(process_command, cmd_ptr, j);
-  if (parser_status < 0) {
-    fprintf(stderr, "parser: error\n");
-    return -1;
-  }
-
-  return indx;
-}
-
-static char *get_raw_input(char *line_buffer) {
-  size_t length = strlen(line_buffer);
-  char *raw_input = malloc(length + 1);
-
-  if (raw_input == NULL) {
-    perror("malloc failed");
-    return NULL;
-  }
-
-  strcpy(raw_input, line_buffer);
-  return raw_input;
-}
-
 int get_num_procs(Job *job) {
   int num = 0;
   Process *proc;
@@ -243,7 +211,10 @@ void mark_bg_jobs(Job **job_head, struct Pending pending_bg_jobs[],
 }
 
 void format_job_info(Job *job, char *status) {
-  fprintf(stderr, "[%ld]  %s    %s\n", (long)job->pgid, status, job->command);
+  if (job->background)
+    fprintf(stderr, "[%ld]  %s      %s &\n", (long)job->pgid, status, job->command);
+  else
+    fprintf(stderr, "[%ld]  %s      %s\n", (long)job->pgid, status, job->command);
 }
 
 void drain_remaining_statuses(Job *job) {
@@ -286,14 +257,20 @@ void drain_remaining_statuses(Job *job) {
 
 void do_job_notification(Job *job, Job **job_head) {
   if (job_is_completed(job)) {
+    if (job->background)
+      format_job_info(job, "Done");
     free_job(job, job_head);
   } else if (job_is_stopped(job))
     format_job_info(job, "Stopped");
 }
 
 void notify_bg_jobs(Job **job_head) {
-  for (Job *job = *job_head; job; job = job->next) {
-    do_job_notification(job, job_head);
+  Job *j = *job_head;
+  Job *next = NULL;
+  while (j) {
+    next = j->next;
+    do_job_notification(j, job_head);
+    j = next;
   }
 }
 

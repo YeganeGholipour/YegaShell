@@ -131,7 +131,7 @@ int execute(Job *job, Job **job_head) {
   }
 
   if (job->background) {
-    handle_background_job(&prev_mask);
+    handle_background_job(&prev_mask, job);
   } else
     handle_foreground_job(&prev_mask, job, shell_pgid, job_head);
 
@@ -171,10 +171,12 @@ int executor(Job *job, Job **job_head) {
 
 /******************** THE UTILITY FUNCTIONS ********************/
 
-void handle_background_job(sigset_t *prev_mask) {
+void handle_background_job(sigset_t *prev_mask, Job *job) {
   if (sigprocmask(SIG_SETMASK, prev_mask, NULL) < 0) {
     perror("sigprocmask(restore) in parent (bg)");
   }
+
+  fprintf(stderr, "[%ld]  %ld\n", (long)job->pgid, (long)job->pgid);
 }
 
 void handle_foreground_job(sigset_t *prev_list, Job *job, pid_t shell_pgid,

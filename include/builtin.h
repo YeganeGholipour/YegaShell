@@ -4,8 +4,8 @@
 #include "job_control.h"
 
 typedef struct {
-    char *name;
-    int (*func)(Job *, Job **);
+  char *name;
+  int (*func)(Job *, Job **);
 } Builtin;
 
 extern Builtin builtin_commands[];
@@ -15,5 +15,6 @@ int exit_func(Job *job, Job **job_head);
 int pwd_func(Job *job, Job **job_head);
 int export_func(Job *job, Job **job_head);
 int fg_func(Job *job, Job **job_head);
+int bg_func(Job *job, Job **job_head);
 
 #endif

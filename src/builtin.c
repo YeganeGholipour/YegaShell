@@ -11,15 +11,18 @@
 #include "env_variable.h"
 #include "executor.h"
 
-Builtin builtin_commands[] = {
-    {"cd", cd_func},   {"help", help_func},     {"exit", exit_func},
-    {"pwd", pwd_func}, {"export", export_func}, {"fg", fg_func},
-    {NULL, NULL}};
+Builtin builtin_commands[] = {{"cd", cd_func},         {"help", help_func},
+                              {"exit", exit_func},     {"pwd", pwd_func},
+                              {"export", export_func}, {"fg", fg_func},
+                              {"bg", bg_func},         {NULL, NULL}};
 
 int fg_func(Job *job, Job **job_head) {
+
+  /********** I AM NOT SURE ABOUT THIS PART *********************/
   // Step -1: drain all background jobs and mark them before running the fg job
-  mark_bg_jobs(job_head, pending_bg_jobs, pending_indx);
-  notify_bg_jobs(job_head);
+  // mark_bg_jobs(job_head, pending_bg_jobs, pending_indx);
+  // notify_bg_jobs(job_head);
+  /**************************************************************/
 
   // Step 0: find the job
   Job *found_job = find_job(job, job_head);
@@ -57,6 +60,54 @@ int fg_func(Job *job, Job **job_head) {
 
   // Step 3: handle the job in the foreground
   handle_foreground_job(&prev_mask, found_job, shell_pgid, job_head);
+  return 0;
+}
+
+int bg_func(Job *job, Job **job_head) {
+
+  /********** I AM NOT SURE ABOUT THIS PART *********************/
+  // Step -1: drain all background jobs and mark them before running the fg job
+  // mark_bg_jobs(job_head, pending_bg_jobs, pending_indx);
+  // notify_bg_jobs(job_head);
+  /**************************************************************/
+
+  // Step 0: find the job
+  Job *found_job = find_job(job, job_head);
+
+  if (!found_job) {
+    fprintf(stderr, "fg: no such job\n");
+    return 1;
+  }
+
+  if (job_is_completed(found_job)) {
+    fprintf(stderr, "fg: job %ld already completed\n", (long)found_job->pgid);
+    return 1;
+  }
+
+  found_job->background = 1;
+
+  // Step 1: block signals in parent
+  sigset_t parent_block_mask, prev_mask;
+  if (block_parent_signals(&parent_block_mask, &prev_mask, found_job) < 0) {
+    perror("fg");
+    return 1;
+  }
+
+  // Step 2: send SIGCONT to the stopped job
+  if (job_is_stopped(found_job)) {
+    // clear the stopped member for each process
+    clear_stopped_mark(found_job);
+    // show the command
+    printf("%s\n", found_job->command);
+    if (kill(-found_job->pgid, SIGCONT) < 0) {
+      perror("fg");
+      sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+      return 1;
+    }
+  }
+
+  // Step 3: handle the job in the background
+  handle_background_job(&prev_mask, found_job);
   return 0;
 }
 
