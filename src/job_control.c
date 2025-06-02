@@ -1,9 +1,11 @@
+#include <errno.h>
 #include <signal.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <wait.h>
 
 #include "job_control.h"
 
@@ -12,6 +14,9 @@ static int split_on_pipe(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
 static Job *create_job(Job **job_ptr, char *line_buffer, COMMAND *cmd);
 static Process *create_process(Process **proc_ptr, COMMAND *cmd);
 static char *get_raw_input(char *line_buffer);
+
+int pending_indx = 0;
+struct Pending pending_bg_jobs[256] = {0};
 
 Job *handle_job_control(char *tokens[], char *line_buffer, size_t num_tokens,
                         COMMAND **cmd_ptr, Process **proc_ptr, Job **job_head) {
@@ -203,4 +208,114 @@ Job *find_job(Job *job, Job **job_head) {
     curr = curr->next;
   }
   return NULL;
+}
+
+void queue_pending_procs(pid_t pid, int status) {
+  pending_bg_jobs[pending_indx].pid = pid;
+  pending_bg_jobs[pending_indx].status = status;
+  pending_indx++;
+}
+
+void mark_bg_jobs(Job **job_head, struct Pending pending_bg_jobs[],
+                  int pending_count) {
+  for (int i = 0; i < pending_count; i++) {
+    pid_t pid = pending_bg_jobs[i].pid;
+    int status = pending_bg_jobs[i].status;
+    int found = 0;
+
+    for (Job *job = *job_head; job && !found; job = job->next) {
+      for (Process *p = job->first_process; p; p = p->next) {
+        if (p->pid == pid) {
+          if (WIFSTOPPED(status)) {
+            p->stopped = 1;
+          } else if (WIFEXITED(status) || WIFSIGNALED(status)) {
+            p->completed = 1;
+            p->status = status;
+          }
+          found = 1;
+          break;
+        }
+      }
+    }
+  }
+
+  pending_indx = 0;
+}
+
+void format_job_info(Job *job, char *status) {
+  fprintf(stderr, "[%ld]  %s    %s\n", (long)job->pgid, status, job->command);
+}
+
+void drain_remaining_statuses(Job *job) {
+  pid_t w;
+  int status;
+
+  while ((w = waitpid(-job->pgid, &status, WNOHANG | WUNTRACED))) {
+    if (w > 0) {
+      Process *p;
+      for (p = job->first_process; p; p = p->next) {
+        if (p->pid == w) {
+          if (WIFSTOPPED(status)) {
+            p->stopped = 1;
+            break;
+          }
+          if (WIFEXITED(status) || WIFSIGNALED(status)) {
+            p->completed = 1;
+            p->status = status;
+            break;
+          }
+        }
+      }
+      continue;
+
+    } else if (w == 0)
+      return;
+
+    else if (w == -1) {
+      if (errno == EINTR) {
+        continue;
+      }
+      if (errno == ECHILD) {
+        return;
+      }
+      perror("waitpid");
+      return;
+    }
+  }
+}
+
+void do_job_notification(Job *job, Job **job_head) {
+  if (job_is_completed(job)) {
+    free_job(job, job_head);
+  } else if (job_is_stopped(job))
+    format_job_info(job, "Stopped");
+}
+
+void notify_bg_jobs(Job **job_head) {
+  for (Job *job = *job_head; job; job = job->next) {
+    do_job_notification(job, job_head);
+  }
+}
+
+int job_is_stopped(Job *job) {
+  Process *p;
+  for (p = job->first_process; p; p = p->next)
+    if (!p->stopped && !p->completed)
+      return 0;
+  return 1;
+}
+
+int job_is_completed(Job *job) {
+  Process *p;
+  for (p = job->first_process; p; p = p->next)
+    if (!p->completed)
+      return 0;
+  return 1;
+}
+
+void clear_stopped_mark(Job *job) {
+  Process *p;
+  for (p = job->first_process; p; p = p->next) {
+    p->stopped = 0;
+  }
 }

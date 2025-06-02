@@ -28,9 +28,7 @@ static void install_child_signal_handler();
 static int child_stdin_setup(COMMAND *cmd, int (*pipes)[2], int proc_num);
 static int child_stdout_setup(COMMAND *cmd, int (*pipes)[2], int proc_num,
                               int num_procs);
-static void do_job_notification(Job *job, Job **job_head);
 void wait_for_children(Job *job, int *pids, int num_procs);
-void drain_remaining_statuses(Job *job);
 
 Variable *variable_table[TABLESIZE] = {NULL};
 
@@ -243,79 +241,6 @@ void wait_for_children(Job *job, int *pids, int num_procs) {
       perror("waitpid");
       return;
     }
-  }
-}
-
-static void format_job_info(Job *job, char *status) {
-  fprintf(stderr, "[%ld]  %s    %s\n", (long)job->pgid, status, job->command);
-}
-
-void drain_remaining_statuses(Job *job) {
-  pid_t w;
-  int status;
-
-  while ((w = waitpid(-job->pgid, &status, WNOHANG | WUNTRACED))) {
-    if (w > 0) {
-      Process *p;
-      for (p = job->first_process; p; p = p->next) {
-        if (p->pid == w) {
-          if (WIFSTOPPED(status)) {
-            p->stopped = 1;
-            break;
-          }
-          if (WIFEXITED(status) || WIFSIGNALED(status)) {
-            p->completed = 1;
-            p->status = status;
-            break;
-          }
-        }
-      }
-      continue;
-
-    } else if (w == 0)
-      return;
-
-    else if (w == -1) {
-      if (errno == EINTR) {
-        continue;
-      }
-      if (errno == ECHILD) {
-        return;
-      }
-      perror("waitpid");
-      return;
-    }
-  }
-}
-
-static void do_job_notification(Job *job, Job **job_head) {
-  if (job_is_completed(job)) {
-    free_job(job, job_head);
-  }
-  else if (job_is_stopped(job))
-    format_job_info(job, "Stopped");
-}
-
-int job_is_stopped(Job *job) {
-  Process *p;
-  for (p = job->first_process; p; p = p->next)
-    if (!p->stopped && !p->completed)
-      return 0;
-  return 1;
-}
-
-int job_is_completed(Job *job) {
-  Process *p;
-  for (p = job->first_process; p; p = p->next)
-    if (!p->completed)
-      return 0;
-  return 1;
-}
-
-void clear_stopped_mark(Job *job) {
-  Process *p;
-  for (p = job->first_process; p; p = p->next) {
-    p->stopped = 0;
   }
 }
 

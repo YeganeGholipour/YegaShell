@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <wait.h>
 
 #include "executor.h"
 #include "expander.h"
@@ -15,6 +16,7 @@
 #include "tokenizer.h"
 
 volatile sig_atomic_t interrupted = 0;
+volatile sig_atomic_t child_changed = 0;
 
 void sigint_handler(int sig) {
   (void)sig;
@@ -26,6 +28,16 @@ void sigquit_handler(int sig) {
   (void)sig;
   interrupted = 1;
   write(STDOUT_FILENO, "\n", 1);
+}
+
+void sigchld_handler(int sig) {
+  (void)sig;
+  pid_t w;
+  int status;
+  while ((w = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
+    child_changed = 1;
+    queue_pending_procs(w, status);
+  }
 }
 
 static void ignore_job_control_signals(void) {
@@ -48,7 +60,7 @@ static void ignore_job_control_signals(void) {
 }
 
 static void init_shell_signals(void) {
-  struct sigaction sa_sigint, sa_sigquit;
+  struct sigaction sa_sigint, sa_sigquit, sa_sigchld;
 
   sa_sigint.sa_handler = sigint_handler;
   sa_sigint.sa_flags = 0;
@@ -63,6 +75,14 @@ static void init_shell_signals(void) {
   sigemptyset(&sa_sigquit.sa_mask);
   if (sigaction(SIGQUIT, &sa_sigquit, NULL) == -1) {
     perror("sigaction SIGQUIT");
+    exit(EXIT_FAILURE);
+  }
+
+  sa_sigquit.sa_handler = sigchld_handler;
+  sa_sigquit.sa_flags = SA_RESTART;
+  sigemptyset(&sa_sigquit.sa_mask);
+  if (sigaction(SIGCHLD, &sa_sigchld, NULL) == -1) {
+    perror("sigaction SIGCHLD");
     exit(EXIT_FAILURE);
   }
 }
@@ -95,6 +115,12 @@ int main(void) {
     if (interrupted) {
       interrupted = 0;
       continue;
+    }
+    if (child_changed) {
+      child_changed = 0;
+      mark_bg_jobs(&job_struct, pending_bg_jobs, pending_indx);
+      notify_bg_jobs(&job_struct);
+      
     }
     prompt_status = prompt_and_read(&line_buffer, &read, &buffsize);
     if (prompt_status < 0) {

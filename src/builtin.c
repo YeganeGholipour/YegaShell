@@ -17,6 +17,11 @@ Builtin builtin_commands[] = {
     {NULL, NULL}};
 
 int fg_func(Job *job, Job **job_head) {
+  // Step -1: drain all background jobs and mark them before running the fg job
+  mark_bg_jobs(job_head, pending_bg_jobs, pending_indx);
+  notify_bg_jobs(job_head);
+
+  // Step 0: find the job
   Job *found_job = find_job(job, job_head);
   pid_t shell_pgid = getpgid(0);
 

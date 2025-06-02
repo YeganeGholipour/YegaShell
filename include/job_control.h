@@ -25,6 +25,13 @@ typedef struct Job {
   int background;
 } Job;
 
+extern struct Pending {
+  pid_t pid;
+  int status;
+} pending_bg_jobs[256];
+
+extern int pending_indx;
+
 Job *handle_job_control(char *tokens[], char *line_buffer, size_t num_tokens,
                         COMMAND **cmd_ptr, Process **proc_ptr, Job **job_head);
 void free_job(Job *job, Job **head);
@@ -32,5 +39,14 @@ int get_num_procs(Job *job);
 void free_all_jobs(Job **head);
 void kill_jobs(Job **job_head);
 Job *find_job(Job *job, Job **job_head);
+void queue_pending_procs(pid_t pid, int status);
+void mark_bg_jobs(Job **job_head, struct Pending pending_bg_jobs[],
+                  int pending_count);
+void drain_remaining_statuses(Job *job);
+void do_job_notification(Job *job, Job **job_head);
+int job_is_stopped(Job *job);
+int job_is_completed(Job *job);
+void clear_stopped_mark(Job *job);
+void notify_bg_jobs(Job **job_head);
 
 #endif
