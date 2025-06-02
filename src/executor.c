@@ -11,7 +11,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "builtin.h"
 #include "env_variable.h"
 #include "executor.h"
 #include "expander.h"
@@ -148,25 +147,13 @@ int executor(Job *job, Job **job_head) {
     return -1;
   }
 
-  int func_num = is_buitin(job->first_process);
-
-  if (func_num == -1) {
-    int execute_status = execute(job, job_head);
-    if (execute_status < 0) {
-      free_job(job, job_head);
-      printf("job freed\n in execute_status < 0\n");
-    }
-
-    return execute_status;
+  int execute_status = execute(job, job_head);
+  if (execute_status < 0) {
+    free_job(job, job_head);
+    printf("job freed\n in execute_status < 0\n");
   }
 
-  else {
-    last_exit_status = builtin_commands[func_num].func(job, job_head);
-    if (strcmp(builtin_commands[func_num].name, "exit") == 0) {
-      is_exit = last_exit_status;
-    }
-    return 0;
-  }
+  return execute_status;
 }
 
 /******************** THE UTILITY FUNCTIONS ********************/
@@ -176,7 +163,7 @@ void handle_background_job(sigset_t *prev_mask, Job *job) {
     perror("sigprocmask(restore) in parent (bg)");
   }
 
-  fprintf(stderr, "[%ld]  %ld\n", (long)job->pgid, (long)job->pgid);
+  fprintf(stderr, "[%ld]  %ld\n", (long)job->job_num, (long)job->pgid);
 }
 
 void handle_foreground_job(sigset_t *prev_list, Job *job, pid_t shell_pgid,
@@ -334,15 +321,6 @@ static int child_stdout_setup(COMMAND *cmd, int (*pipes)[2], int proc_num,
   }
 
   return 0;
-}
-
-int is_buitin(Process *proc) {
-  char *command = proc->cmd->argv[0];
-  for (int i = 0; builtin_commands[i].name != NULL; i++) {
-    if (strcmp(command, builtin_commands[i].name) == 0)
-      return i;
-  }
-  return -1;
 }
 
 char *get_full_path(const char *command) {

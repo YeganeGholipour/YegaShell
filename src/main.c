@@ -4,16 +4,20 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <wait.h>
 
+#include "builtin.h"
 #include "executor.h"
 #include "expander.h"
 #include "job_control.h"
 #include "parser.h"
 #include "tokenizer.h"
+
+int is_buitin(Process *proc);
 
 volatile sig_atomic_t interrupted = 0;
 volatile sig_atomic_t child_changed = 0;
@@ -151,41 +155,55 @@ int main(void) {
       continue;
 
     /* JOB CONTROL PHASE */
-    Job *new_job =
-        handle_job_control(tokens, line_buffer, token_num, &command_struct,
-                           &process_struct, &job_struct);
-    if (new_job == NULL) {
-      fprintf(stderr, "Error: job control\n");
-      freeMemory(tokens, token_num);
-      continue;
-    }
+    Process *proc_head =
+        handle_processes(tokens, token_num, &command_struct, &process_struct);
 
-    /* EXECUTION PHASE */
-    executor_status = executor(new_job, &job_struct);
-    if (executor_status == -1) {
-      fprintf(stderr, "failed to execute\n");
-      exit_status = EXIT_FAILURE;
-      freeMemory(tokens, token_num);
-      new_job = NULL;
+    // is builtin
+    int func_num = is_buitin(proc_head);
+    if (func_num != -1) {
+      last_exit_status =
+          builtin_commands[func_num].func(proc_head, &job_struct);
+
+      free(proc_head);
+      free_struct_memory(command_struct);
       process_struct = NULL;
       command_struct = NULL;
-      break;
+      
+      if (strcmp(builtin_commands[func_num].name, "exit") == 0) {
+        exit_status = last_exit_status;
+        freeMemory(tokens, token_num);
+        break;
+      }
     }
 
-    if (is_exit != -1) {
-      exit_status = is_exit;
-      freeMemory(tokens, token_num);
+    // is not builtin
+    else {
+      Job *new_job = handle_job_control(line_buffer, command_struct, proc_head,
+                                        &job_struct);
+      if (new_job == NULL) {
+        fprintf(stderr, "Error: job control\n");
+        freeMemory(tokens, token_num);
+        continue;
+      }
+
+      /* EXECUTION PHASE */
+      executor_status = executor(new_job, &job_struct);
+      if (executor_status == -1) {
+        fprintf(stderr, "failed to execute\n");
+        exit_status = EXIT_FAILURE;
+        freeMemory(tokens, token_num);
+        new_job = NULL;
+        process_struct = NULL;
+        command_struct = NULL;
+        break;
+      }
       new_job = NULL;
-      process_struct = NULL;
-      command_struct = NULL;
-      break;
     }
 
     /* FREE MEMORY - LAST STEP */
     // free_job(new_job, &job_struct);
 
     freeMemory(tokens, token_num);
-    new_job = NULL;
     process_struct = NULL;
     command_struct = NULL;
   }
@@ -194,4 +212,13 @@ int main(void) {
   free_all_jobs(&job_struct);
   free(line_buffer);
   return exit_status;
+}
+
+int is_buitin(Process *proc) {
+  char *command = proc->cmd->argv[0];
+  for (int i = 0; builtin_commands[i].name != NULL; i++) {
+    if (strcmp(command, builtin_commands[i].name) == 0)
+      return i;
+  }
+  return -1;
 }

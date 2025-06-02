@@ -11,21 +11,43 @@
 #include "env_variable.h"
 #include "executor.h"
 
-Builtin builtin_commands[] = {{"cd", cd_func},         {"help", help_func},
-                              {"exit", exit_func},     {"pwd", pwd_func},
-                              {"export", export_func}, {"fg", fg_func},
-                              {"bg", bg_func},         {NULL, NULL}};
+Builtin builtin_commands[] = {
+    {"cd", cd_func},   {"help", help_func},     {"exit", exit_func},
+    {"pwd", pwd_func}, {"export", export_func}, {"fg", fg_func},
+    {"bg", bg_func},   {"jobs", jobs_func},     {NULL, NULL}};
 
-int fg_func(Job *job, Job **job_head) {
+int jobs_func(Process *proc, Job **job_head) {
+  mark_bg_jobs(job_head, pending_bg_jobs, pending_indx);
+  (void)proc;
+  Job *j = *job_head;
+  Job *next = NULL;
+  while (j) {
+    next = j->next;
+    if (job_is_completed(j)) {
+      // it should be freed by now!
+      free_job(j, job_head);
+      j = next;
+      continue;
+    }
+
+    char *status = job_is_stopped(j) ? "Stopped" : "Running";
+    format_job_info(j, status);
+    j = next;
+  }
+
+  return 0;
+}
+
+int fg_func(Process *proc, Job **job_head) {
 
   /********** I AM NOT SURE ABOUT THIS PART *********************/
   // Step -1: drain all background jobs and mark them before running the fg job
-  // mark_bg_jobs(job_head, pending_bg_jobs, pending_indx);
+  mark_bg_jobs(job_head, pending_bg_jobs, pending_indx);
   // notify_bg_jobs(job_head);
   /**************************************************************/
 
   // Step 0: find the job
-  Job *found_job = find_job(job, job_head);
+  Job *found_job = find_job(proc, job_head);
   pid_t shell_pgid = getpgid(0);
 
   if (!found_job) {
@@ -34,7 +56,8 @@ int fg_func(Job *job, Job **job_head) {
   }
 
   if (job_is_completed(found_job)) {
-    fprintf(stderr, "fg: job %ld already completed\n", (long)found_job->pgid);
+    fprintf(stderr, "fg: job %ld already completed\n",
+            (long)found_job->job_num);
     return 1;
   }
 
@@ -63,24 +86,25 @@ int fg_func(Job *job, Job **job_head) {
   return 0;
 }
 
-int bg_func(Job *job, Job **job_head) {
+int bg_func(Process *proc, Job **job_head) {
 
   /********** I AM NOT SURE ABOUT THIS PART *********************/
-  // Step -1: drain all background jobs and mark them before running the fg job
-  // mark_bg_jobs(job_head, pending_bg_jobs, pending_indx);
+  // Step -1: drain all background jobs and mark them before running the bg job
+  mark_bg_jobs(job_head, pending_bg_jobs, pending_indx);
   // notify_bg_jobs(job_head);
   /**************************************************************/
 
   // Step 0: find the job
-  Job *found_job = find_job(job, job_head);
+  Job *found_job = find_job(proc, job_head);
 
   if (!found_job) {
-    fprintf(stderr, "fg: no such job\n");
+    fprintf(stderr, "bg: no such job\n");
     return 1;
   }
 
   if (job_is_completed(found_job)) {
-    fprintf(stderr, "fg: job %ld already completed\n", (long)found_job->pgid);
+    fprintf(stderr, "bg: job %ld already completed\n",
+            (long)found_job->job_num);
     return 1;
   }
 
@@ -89,7 +113,7 @@ int bg_func(Job *job, Job **job_head) {
   // Step 1: block signals in parent
   sigset_t parent_block_mask, prev_mask;
   if (block_parent_signals(&parent_block_mask, &prev_mask, found_job) < 0) {
-    perror("fg");
+    perror("bg");
     return 1;
   }
 
@@ -100,7 +124,7 @@ int bg_func(Job *job, Job **job_head) {
     // show the command
     printf("%s\n", found_job->command);
     if (kill(-found_job->pgid, SIGCONT) < 0) {
-      perror("fg");
+      perror("bg");
       sigprocmask(SIG_SETMASK, &prev_mask, NULL);
       return 1;
     }
@@ -111,10 +135,10 @@ int bg_func(Job *job, Job **job_head) {
   return 0;
 }
 
-int cd_func(Job *job, Job **job_head) {
+int cd_func(Process *proc, Job **job_head) {
   (void)job_head;
   const char *path;
-  COMMAND *cmd = job->first_process->cmd;
+  COMMAND *cmd = proc->cmd;
 
   if (cmd->argv[1] == NULL || strcmp(cmd->argv[1], "~") == 0) {
     path = getenv("HOME");
@@ -132,8 +156,8 @@ int cd_func(Job *job, Job **job_head) {
   return 0;
 }
 
-int help_func(Job *job, Job **job_head) {
-  (void)job;
+int help_func(Process *proc, Job **job_head) {
+  (void)proc;
   (void)job_head;
   printf("Yega Shell\n");
   printf("Type the name of the command, and hit enter.\n");
@@ -142,17 +166,17 @@ int help_func(Job *job, Job **job_head) {
   return 0;
 }
 
-int exit_func(Job *job, Job **job_head) {
+int exit_func(Process *proc, Job **job_head) {
   (void)job_head;
-  COMMAND *cmd = job->first_process->cmd;
+  COMMAND *cmd = proc->cmd;
   int status = 0;
   if (cmd->argv[1])
     status = atoi(cmd->argv[1]);
   return status;
 }
 
-int pwd_func(Job *job, Job **job_head) {
-  (void)job;
+int pwd_func(Process *proc, Job **job_head) {
+  (void)proc;
   (void)job_head;
   char *cwd = getcwd(NULL, 0);
   if (cwd) {
@@ -165,9 +189,9 @@ int pwd_func(Job *job, Job **job_head) {
   }
 }
 
-int export_func(Job *job, Job **job_head) {
+int export_func(Process *proc, Job **job_head) {
   (void)job_head;
-  COMMAND *cmd = job->first_process->cmd;
+  COMMAND *cmd = proc->cmd;
   char *arg, *key, *value;
 
   if (!cmd->argv[1]) {
