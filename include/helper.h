@@ -3,10 +3,10 @@
 
 #include "job_control.h"
 
-int is_buitin(Process *proc);
-int builtin_routine(int func_num, Process *proc_head, Job **job_struct,
-                    Process **process_struct, Command **command_struct);
+int is_bulitin(Process *proc);
+int builtin_routine(int func_num, Process *proc_head, Job **job_ptr,
+                    Process **process_ptr, Command **command_ptr);
 
-void clean_up(Job **job_struct, char *line_buffer);
+void clean_up(Job **job_ptr, char *line_buffer);
 
 #endif

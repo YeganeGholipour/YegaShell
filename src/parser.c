@@ -123,7 +123,7 @@ int parse(char *tokens[], Command **cmd_ptr, size_t num_tokens) {
   return 0;
 }
 
-void print_command_struct(Command *cmd) {
+void print_command_ptr(Command *cmd) {
   if (!cmd)
     return;
   printf("command: %s\n", cmd->argv[0]);
