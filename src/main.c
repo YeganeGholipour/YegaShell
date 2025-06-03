@@ -18,6 +18,8 @@
 #include "tokenizer.h"
 
 int is_buitin(Process *proc);
+int builtin_routine(int func_num, Process *proc_head, Job **job_struct,
+                    Process **process_struct, COMMAND **command_struct);
 
 volatile sig_atomic_t interrupted = 0;
 volatile sig_atomic_t child_changed = 0;
@@ -161,15 +163,8 @@ int main(void) {
     // is builtin
     int func_num = is_buitin(proc_head);
     if (func_num != -1) {
-      last_exit_status =
-          builtin_commands[func_num].func(proc_head, &job_struct);
-
-      free(proc_head);
-      free_struct_memory(command_struct);
-      process_struct = NULL;
-      command_struct = NULL;
-      
-      if (strcmp(builtin_commands[func_num].name, "exit") == 0) {
+      if (builtin_routine(func_num, proc_head, &job_struct, &process_struct,
+                          &command_struct) < 0) {
         exit_status = last_exit_status;
         freeMemory(tokens, token_num);
         break;
@@ -221,4 +216,19 @@ int is_buitin(Process *proc) {
       return i;
   }
   return -1;
+}
+
+int builtin_routine(int func_num, Process *proc_head, Job **job_struct,
+                    Process **process_struct, COMMAND **command_struct) {
+  last_exit_status = builtin_commands[func_num].func(proc_head, job_struct);
+
+  free(proc_head);
+  free_struct_memory(*command_struct);
+  *process_struct = NULL;
+  *command_struct = NULL;
+
+  if (strcmp(builtin_commands[func_num].name, "exit") == 0) {
+    return -1;
+  }
+  return 0;
 }
