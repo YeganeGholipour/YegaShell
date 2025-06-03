@@ -7,7 +7,7 @@
 
 typedef struct Process {
   struct Process *next;
-  COMMAND *cmd;
+  Command *cmd;
   pid_t pid;
   int completed;
   int stopped;
@@ -32,9 +32,9 @@ extern struct Pending {
 
 extern int pending_indx;
 
-Job *handle_job_control(char *line_buffer, COMMAND *cmd_ptr, Process *proc_ptr,
+Job *handle_job_control(char *line_buffer, Command *cmd_ptr, Process *proc_ptr,
                         Job **job_head);
-Process *handle_processes(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
+Process *handle_processes(char *tokens[], size_t num_tokens, Command **cmd_ptr,
                           Process **proc_ptr);
 void free_job(Job *job, Job **head);
 void free_process_list(Process *proc);

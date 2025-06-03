@@ -11,12 +11,12 @@ typedef struct {
   char *outfile;
   int append_output;
   int background;
-} COMMAND;
+} Command;
 
-void free_struct_memory(COMMAND *cmd);
-int parse(char *tokens[], COMMAND **command_struct, size_t num_tokens);
-void print_command_struct(COMMAND *command_struct);
-int split_on_pipe(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
+void free_struct_memory(Command *cmd);
+int parse(char *tokens[], Command **command_struct, size_t num_tokens);
+void print_command_struct(Command *command_struct);
+int split_on_pipe(char *tokens[], size_t num_tokens, Command **cmd_ptr,
                   int indx);
 char *get_raw_input(char *line_buffer);
 int is_background_char_valid(char *tokens[], size_t num_tokens);

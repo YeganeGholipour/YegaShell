@@ -7,6 +7,6 @@
 
 extern int last_exit_status;
 
-void expander(COMMAND *cmd, char **envp);
+void expander(Command *cmd, char **envp);
 
 #endif

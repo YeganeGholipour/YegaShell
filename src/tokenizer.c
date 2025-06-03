@@ -1,12 +1,12 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 #include "tokenizer.h"
 
@@ -34,7 +34,7 @@ int prompt_and_read(char **line_buffer, ssize_t *read, size_t *buffsize) {
   return 0;
 }
 
-void freeMemory(char *tokens[], int token_num) {
+void free_memory(char *tokens[], int token_num) {
   for (int i = 0; i < token_num; i++) {
     free(tokens[i]);
     tokens[i] = NULL;
@@ -158,7 +158,8 @@ char *handle_double_quotes(char token_buffer[], char *p, int max_len) {
   return p + 1;
 }
 
-// Escape characters are not processed in single quotes yet (like in real shells)
+// Escape characters are not processed in single quotes yet (like in real
+// shells)
 char *handle_special_characters(char token_buffer[], char *p, int max_len) {
   char character = *p;
   if (max_len > 1) {

@@ -9,14 +9,14 @@
 
 #include "job_control.h"
 
-static Job *create_job(Job **job_ptr, char *line_buffer, COMMAND *cmd);
-static Process *create_process(Process **proc_ptr, COMMAND *cmd);
+static Job *create_job(Job **job_ptr, char *line_buffer, Command *cmd);
+static Process *create_process(Process **proc_ptr, Command *cmd);
 
 int pending_indx = 0;
 struct Pending pending_bg_jobs[256] = {0};
 static long job_num = 1;
 
-Job *handle_job_control(char *line_buffer, COMMAND *cmd_ptr,
+Job *handle_job_control(char *line_buffer, Command *cmd_ptr,
                         Process *proc_ptr, Job **job_head) {
 
   Job *new_job = create_job(job_head, line_buffer, cmd_ptr);
@@ -25,7 +25,7 @@ Job *handle_job_control(char *line_buffer, COMMAND *cmd_ptr,
   return new_job;
 }
 
-Process *handle_processes(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
+Process *handle_processes(char *tokens[], size_t num_tokens, Command **cmd_ptr,
                           Process **proc_ptr) {
   int i = 0;
 
@@ -103,7 +103,7 @@ void free_job(Job *job, Job **head) {
   }
 }
 
-static Job *create_job(Job **job_head_ptr, char *line_buffer, COMMAND *cmd) {
+static Job *create_job(Job **job_head_ptr, char *line_buffer, Command *cmd) {
   if (*job_head_ptr == NULL) {
     *job_head_ptr = calloc(1, sizeof(Job));
     if (!*job_head_ptr) {
@@ -131,7 +131,7 @@ static Job *create_job(Job **job_head_ptr, char *line_buffer, COMMAND *cmd) {
   return curr->next;
 }
 
-static Process *create_process(Process **proc_ptr, COMMAND *cmd) {
+static Process *create_process(Process **proc_ptr, Command *cmd) {
   if (*proc_ptr == NULL) {
     *proc_ptr = calloc(1, sizeof(Process));
     (*proc_ptr)->cmd = cmd;

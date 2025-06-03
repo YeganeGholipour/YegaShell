@@ -55,7 +55,7 @@ static char *expand_variable(const char *token, char **envp) {
   return out;
 }
 
-void expander(COMMAND *cmd, char **envp) {
+void expander(Command *cmd, char **envp) {
   for (int i = 1; cmd->argv[i] != NULL; i++) {
     char *token = cmd->argv[i];
     if (token[0] == '$') {

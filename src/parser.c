@@ -7,7 +7,7 @@
 
 static const char *special_characters[OPERATORSLEN] = {">", "<", "&", ">>"};
 
-COMMAND *allocate_memory(size_t num_args);
+Command *allocate_memory(size_t num_args);
 static int is_background(char *tok) { return strcmp(tok, "&") == 0; }
 static int is_append_output(char *tok) { return strcmp(tok, ">>") == 0; }
 static int is_output_redirection(char *tok) { return strcmp(tok, ">") == 0; }
@@ -19,8 +19,8 @@ static int is_special_char(char *tok) {
   return 0;
 }
 
-COMMAND *allocate_memory(size_t num_args) {
-  COMMAND *cmd = malloc(sizeof *cmd);
+Command *allocate_memory(size_t num_args) {
+  Command *cmd = malloc(sizeof *cmd);
   if (!cmd)
     return NULL;
 
@@ -41,7 +41,7 @@ COMMAND *allocate_memory(size_t num_args) {
   return cmd;
 }
 
-void free_struct_memory(COMMAND *cmd) {
+void free_struct_memory(Command *cmd) {
   if (!cmd)
     return;
 
@@ -55,8 +55,8 @@ void free_struct_memory(COMMAND *cmd) {
   free(cmd);
 }
 
-int parse(char *tokens[], COMMAND **cmd_ptr, size_t num_tokens) {
-  COMMAND *cmd = allocate_memory(num_tokens);
+int parse(char *tokens[], Command **cmd_ptr, size_t num_tokens) {
+  Command *cmd = allocate_memory(num_tokens);
   if (!cmd)
     return -1;
   *cmd_ptr = cmd;
@@ -123,7 +123,7 @@ int parse(char *tokens[], COMMAND **cmd_ptr, size_t num_tokens) {
   return 0;
 }
 
-void print_command_struct(COMMAND *cmd) {
+void print_command_struct(Command *cmd) {
   if (!cmd)
     return;
   printf("command: %s\n", cmd->argv[0]);
@@ -139,7 +139,7 @@ void print_command_struct(COMMAND *cmd) {
   printf("background: %d\n", cmd->background);
 }
 
-int split_on_pipe(char *tokens[], size_t num_tokens, COMMAND **cmd_ptr,
+int split_on_pipe(char *tokens[], size_t num_tokens, Command **cmd_ptr,
                   int indx) {
   char *process_command[num_tokens + 1];
   int j = 0;

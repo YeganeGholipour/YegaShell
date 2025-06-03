@@ -138,7 +138,7 @@ int bg_func(Process *proc, Job **job_head) {
 int cd_func(Process *proc, Job **job_head) {
   (void)job_head;
   const char *path;
-  COMMAND *cmd = proc->cmd;
+  Command *cmd = proc->cmd;
 
   if (cmd->argv[1] == NULL || strcmp(cmd->argv[1], "~") == 0) {
     path = getenv("HOME");
@@ -168,7 +168,7 @@ int help_func(Process *proc, Job **job_head) {
 
 int exit_func(Process *proc, Job **job_head) {
   (void)job_head;
-  COMMAND *cmd = proc->cmd;
+  Command *cmd = proc->cmd;
   int status = 0;
   if (cmd->argv[1])
     status = atoi(cmd->argv[1]);
@@ -191,7 +191,7 @@ int pwd_func(Process *proc, Job **job_head) {
 
 int export_func(Process *proc, Job **job_head) {
   (void)job_head;
-  COMMAND *cmd = proc->cmd;
+  Command *cmd = proc->cmd;
   char *arg, *key, *value;
 
   if (!cmd->argv[1]) {

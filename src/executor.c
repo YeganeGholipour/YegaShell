@@ -19,13 +19,13 @@ int execute(Job *job, Job **job_head);
 int is_buitin(Process *proc);
 char *get_full_path(const char *command);
 char **build_envp(void);
-static void exec_command(COMMAND *cmd);
+static void exec_command(Command *cmd);
 int block_parent_signals(sigset_t *block_list, sigset_t *prev_list, Job *job);
 static void free_pipes_and_pids(int (*pipes)[2]);
 static void close_pipe_ends(int num_procs, int (*pipes)[2]);
 static void install_child_signal_handler();
-static int child_stdin_setup(COMMAND *cmd, int (*pipes)[2], int proc_num);
-static int child_stdout_setup(COMMAND *cmd, int (*pipes)[2], int proc_num,
+static int child_stdin_setup(Command *cmd, int (*pipes)[2], int proc_num);
+static int child_stdout_setup(Command *cmd, int (*pipes)[2], int proc_num,
                               int num_procs);
 void wait_for_children(Job *job, int *pids, int num_procs);
 
@@ -36,7 +36,7 @@ int is_exit = -1;
 
 int execute(Job *job, Job **job_head) {
   Process *proc;
-  COMMAND *cmd;
+  Command *cmd;
   pid_t shell_pgid = getpid(), pgid = 0;
   job->num_procs = get_num_procs(job);
   int local_num_procs = job->num_procs;
@@ -233,7 +233,7 @@ void wait_for_children(Job *job, int *pids, int num_procs) {
   }
 }
 
-static void exec_command(COMMAND *cmd) {
+static void exec_command(Command *cmd) {
   char *full_path = get_full_path(cmd->argv[0]);
   if (!full_path) {
     fprintf(stderr, "%s: command not found\n", cmd->argv[0]);
@@ -289,7 +289,7 @@ static void install_child_signal_handler(void) {
   sigaction(SIGTSTP, &sa, NULL);
 }
 
-static int child_stdin_setup(COMMAND *cmd, int (*pipes)[2], int proc_num) {
+static int child_stdin_setup(Command *cmd, int (*pipes)[2], int proc_num) {
   if (cmd->infile) {
     int in_fd = open(cmd->infile, O_RDONLY);
     if (in_fd < 0)
@@ -305,7 +305,7 @@ static int child_stdin_setup(COMMAND *cmd, int (*pipes)[2], int proc_num) {
   return 0;
 }
 
-static int child_stdout_setup(COMMAND *cmd, int (*pipes)[2], int proc_num,
+static int child_stdout_setup(Command *cmd, int (*pipes)[2], int proc_num,
                               int num_procs) {
   if (cmd->outfile) {
     int flags = O_WRONLY | O_CREAT | (cmd->append_output ? O_APPEND : O_TRUNC);
