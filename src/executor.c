@@ -16,7 +16,11 @@
 #include "expander.h"
 
 int execute(Job *job, Job **job_head);
-int is_buitin(Process *proc);
+static void child_setup(pid_t pgid, sigset_t *prev_mask, int (*pipes)[],
+                        int proc_num, Command *cmd, Job *job);
+static void parent_setup(pid_t *pgid, int pid, int proc_num, int (*pipes)[2],
+                         Process *proc, Job *job);
+
 char *get_full_path(const char *command);
 char **build_envp(void);
 static void exec_command(Command *cmd);
@@ -81,52 +85,10 @@ int execute(Job *job, Job **job_head) {
       return -1;
     }
 
-    if (pid == 0) {
-
-      install_child_signal_handler();
-
-      if (setpgid(0, pgid) < 0) {
-        perror("child: setpgid failed");
-        exit(EXIT_FAILURE);
-      }
-
-      if (sigprocmask(SIG_SETMASK, &prev_mask, NULL) < 0) {
-        perror("sigprocmask(unblock) in child");
-        exit(EXIT_FAILURE);
-      }
-
-      if (child_stdin_setup(cmd, pipes, proc_num) < 0) {
-        perror("failed to open input file");
-        exit(EXIT_FAILURE);
-      }
-
-      if (child_stdout_setup(cmd, pipes, proc_num, job->num_procs) < 0) {
-        perror("failed to open output file");
-        exit(EXIT_FAILURE);
-      }
-
-      close_pipe_ends(job->num_procs, pipes);
-      exec_command(cmd);
-      perror("execve failed");
-      exit(EXIT_FAILURE);
-    }
-
-    if (proc_num == 0) {
-      pgid = pid;
-      job->pgid = pgid;
-    }
-    proc->pid = pid;
-    if (setpgid(pid, pgid) < 0 && errno != EACCES && errno != EINVAL) {
-      perror("parent: setpgid failed");
-    }
-    job->pids[proc_num] = pid;
-
-    if (proc_num > 0) {
-      close(pipes[proc_num - 1][0]);
-    }
-    if (proc_num < job->num_procs - 1) {
-      close(pipes[proc_num][1]);
-    }
+    if (pid == 0)
+      child_setup(pgid, &prev_mask, pipes, proc_num, cmd, job);
+    else
+      parent_setup(&pgid, pid, proc_num, pipes, proc, job);
   }
 
   if (job->background) {
@@ -157,6 +119,56 @@ int executor(Job *job, Job **job_head) {
 }
 
 /******************** THE UTILITY FUNCTIONS ********************/
+
+static void child_setup(pid_t pgid, sigset_t *prev_mask, int (*pipes)[],
+                        int proc_num, Command *cmd, Job *job) {
+  install_child_signal_handler();
+
+  if (setpgid(0, pgid) < 0) {
+    perror("child: setpgid failed");
+    exit(EXIT_FAILURE);
+  }
+
+  if (sigprocmask(SIG_SETMASK, prev_mask, NULL) < 0) {
+    perror("sigprocmask(unblock) in child");
+    exit(EXIT_FAILURE);
+  }
+
+  if (child_stdin_setup(cmd, pipes, proc_num) < 0) {
+    perror("failed to open input file");
+    exit(EXIT_FAILURE);
+  }
+
+  if (child_stdout_setup(cmd, pipes, proc_num, job->num_procs) < 0) {
+    perror("failed to open output file");
+    exit(EXIT_FAILURE);
+  }
+
+  close_pipe_ends(job->num_procs, pipes);
+  exec_command(cmd);
+  perror("execve failed");
+  exit(EXIT_FAILURE);
+}
+
+static void parent_setup(pid_t *pgid, int pid, int proc_num, int (*pipes)[2],
+                         Process *proc, Job *job) {
+  if (proc_num == 0) {
+    *pgid = pid;
+    job->pgid = *pgid;
+  }
+  proc->pid = pid;
+  if (setpgid(pid, *pgid) < 0 && errno != EACCES && errno != EINVAL) {
+    perror("parent: setpgid failed");
+  }
+  job->pids[proc_num] = pid;
+
+  if (proc_num > 0) {
+    close(pipes[proc_num - 1][0]);
+  }
+  if (proc_num < job->num_procs - 1) {
+    close(pipes[proc_num][1]);
+  }
+}
 
 void handle_background_job(sigset_t *prev_mask, Job *job) {
   if (sigprocmask(SIG_SETMASK, prev_mask, NULL) < 0) {
