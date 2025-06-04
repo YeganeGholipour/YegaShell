@@ -1,243 +1,73 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <errno.h>
 #include <signal.h>
-#include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <wait.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "job_control.h"
 
-static Job *create_job(Job **job_ptr, char *line_buffer, Command *cmd);
-static Process *create_process(Process **proc_ptr, Command *cmd);
+int last_exit_status = 0;
 
-int pending_indx = 0;
-struct Pending pending_bg_jobs[256] = {0};
-static long job_num = 1;
-
-Job *handle_job_control(char *line_buffer, Command *cmd_ptr,
-                        Process *proc_ptr, Job **job_head) {
-
-  Job *new_job = create_job(job_head, line_buffer, cmd_ptr);
-  new_job->first_process = proc_ptr;
-  new_job->job_num = job_num++;
-  return new_job;
-}
-
-Process *handle_processes(char *tokens[], size_t num_tokens, Command **cmd_ptr,
-                          Process **proc_ptr) {
-  int i = 0;
-
-  // see if bakground job character is valid
-  if (is_background_char_valid(tokens, num_tokens) == 0)
-    return NULL;
-
-  while (i < (int)num_tokens) {
-    int split_indx = split_on_pipe(tokens, num_tokens, cmd_ptr, i);
-    if (split_indx < 0) {
-      return NULL;
-    }
-
-    *proc_ptr = create_process(proc_ptr, *cmd_ptr);
-
-    if (split_indx < (int)num_tokens && strcmp(tokens[split_indx], "|") == 0) {
-      i = split_indx + 1;
-    } else {
-      break;
-    }
-  }
-  return *proc_ptr;
-}
-
-void kill_jobs(Job **job_head) {
-  for (Job *j = *job_head; j; j = j->next) {
-    kill(-j->pgid, SIGHUP);
-    kill(-j->pgid, SIGCONT);
-    kill(-j->pgid, SIGTERM);
-  }
-}
-
-void free_all_jobs(Job **head) {
-  Job *curr = *head;
-  Job *next;
-
-  while (curr) {
-    next = curr->next;
-    free_job(curr, head);
-    curr = next;
-  }
-}
-
-void free_process_list(Process *proc) {
-  Process *curr = proc;
-  Process *next;
-
-  while (curr) {
-    next = curr->next;
-    free_struct_memory(curr->cmd);
-    free(curr);
-    curr = next;
-  }
-}
-
-void free_job(Job *job, Job **head) {
-  Job *prev = NULL;
-  Job *curr = *head;
-
-  while (curr) {
-    if (curr == job) {
-      if (prev)
-        prev->next = curr->next;
-      else
-        *head = curr->next;
-
-      free_process_list(curr->first_process);
-      free(curr->command);
-      free(curr->pids);
-      free(curr);
-      return;
-    }
-    prev = curr;
-    curr = curr->next;
-  }
-}
-
-static Job *create_job(Job **job_head_ptr, char *line_buffer, Command *cmd) {
-  if (*job_head_ptr == NULL) {
-    *job_head_ptr = calloc(1, sizeof(Job));
-    if (!*job_head_ptr) {
-      perror("calloc for Job failed");
-      return NULL;
-    }
-    (*job_head_ptr)->command = get_raw_input(line_buffer);
-    (*job_head_ptr)->background = (cmd->background ? 1 : 0);
-
-    return *job_head_ptr;
-  }
-
-  Job *curr = *job_head_ptr;
-  while (curr->next)
-    curr = curr->next;
-
-  curr->next = calloc(1, sizeof(Job));
-  if (!curr->next) {
-    perror("calloc for Job failed");
-    return NULL;
-  }
-  curr->next->command = get_raw_input(line_buffer);
-  curr->next->background = (cmd->background ? 1 : 0);
-
-  return curr->next;
-}
-
-static Process *create_process(Process **proc_ptr, Command *cmd) {
-  if (*proc_ptr == NULL) {
-    *proc_ptr = calloc(1, sizeof(Process));
-    (*proc_ptr)->cmd = cmd;
+void setup_job_control(Job *job, Job **job_head, sigset_t *prev_mask,
+                       pid_t shell_pgid) {
+  if (job->background) {
+    handle_background_job(prev_mask, job);
   } else
-    (*proc_ptr)->next = create_process(&(*proc_ptr)->next, cmd);
-
-  return *proc_ptr;
+    handle_foreground_job(prev_mask, job, shell_pgid, job_head);
 }
 
-int get_num_procs(Job *job) {
-  int num = 0;
-  Process *proc;
-  for (proc = job->first_process; proc; proc = proc->next)
-    num++;
+void handle_foreground_job(sigset_t *prev_list, Job *job, pid_t shell_pgid,
+                           Job **job_head) {
 
-  return num;
-}
+  if (tcsetpgrp(STDIN_FILENO, job->pgid) < 0)
+    perror("parent: tcsetpgrp failed");
 
-Job *find_job(Process *proc, Job **job_head) {
-  char **argv = proc->cmd->argv;
-  long job_num = -1;
+  wait_for_children(job, job->pids, job->num_procs);
 
-  if (argv[1] == NULL) {
-    Job *curr = *job_head;
-    Job *last = NULL;
-    while (curr) {
-      last = curr;
-      curr = curr->next;
-    }
-    return last;
+  drain_remaining_statuses(job);
+
+  if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0) {
+    perror("parent: couldn't reclaim terminal");
   }
 
-  if (argv[1][0] != '%' || argv[1][1] == '\0') {
-    return NULL;
-  }
+  do_job_notification(job, job_head);
 
-  char *endptr;
-  job_num = strtol(argv[1] + 1, &endptr, 10);
-
-  if (*endptr != '\0' || job_num <= 0) {
-    return NULL;
+  if (sigprocmask(SIG_SETMASK, prev_list, NULL) < 0) {
+    perror("sigprocmask(restore) in parent (fg)");
   }
-
-  Job *curr = *job_head;
-  while (curr) {
-    if ((long)curr->job_num == job_num) {
-      return curr;
-    }
-    curr = curr->next;
-  }
-  return NULL;
 }
 
-void queue_pending_procs(pid_t pid, int status) {
-  pending_bg_jobs[pending_indx].pid = pid;
-  pending_bg_jobs[pending_indx].status = status;
-  pending_indx++;
-}
-
-void mark_bg_jobs(Job **job_head, struct Pending pending_bg_jobs[],
-                  int pending_count) {
-  for (int i = 0; i < pending_count; i++) {
-    pid_t pid = pending_bg_jobs[i].pid;
-    int status = pending_bg_jobs[i].status;
-    int found = 0;
-
-    for (Job *job = *job_head; job && !found; job = job->next) {
-      for (Process *p = job->first_process; p; p = p->next) {
-        if (p->pid == pid) {
-          if (WIFSTOPPED(status)) {
-            p->stopped = 1;
-          } else if (WIFEXITED(status) || WIFSIGNALED(status)) {
-            p->completed = 1;
-            p->status = status;
-          }
-          found = 1;
-          break;
-        }
-      }
-    }
+void handle_background_job(sigset_t *prev_mask, Job *job) {
+  if (sigprocmask(SIG_SETMASK, prev_mask, NULL) < 0) {
+    perror("sigprocmask(restore) in parent (bg)");
   }
 
-  pending_indx = 0;
+  fprintf(stderr, "[%ld]  %ld\n", (long)job->job_num, (long)job->pgid);
 }
 
-void format_job_info(Job *job, char *status) {
-  if (job->background)
-    fprintf(stderr, "[%ld]  %s      %s &\n", (long)job->job_num, status,
-            job->command);
-  else
-    fprintf(stderr, "[%ld]  %s      %s\n", (long)job->job_num, status,
-            job->command);
-}
-
-void drain_remaining_statuses(Job *job) {
-  pid_t w;
+void wait_for_children(Job *job, int *pids, int num_procs) {
   int status;
+  pid_t w;
 
-  while ((w = waitpid(-job->pgid, &status, WNOHANG | WUNTRACED))) {
+  while (1) {
+    w = waitpid(-job->pgid, &status, WUNTRACED);
     if (w > 0) {
       Process *p;
       for (p = job->first_process; p; p = p->next) {
         if (p->pid == w) {
+          if (w == pids[num_procs - 1]) {
+            if (WIFEXITED(status)) {
+              last_exit_status = WEXITSTATUS(status);
+            } else if (WIFSIGNALED(status)) {
+              last_exit_status = 128 + WTERMSIG(status);
+            }
+          }
           if (WIFSTOPPED(status)) {
             p->stopped = 1;
-            break;
+            return;
           }
           if (WIFEXITED(status) || WIFSIGNALED(status)) {
             p->completed = 1;
@@ -247,11 +77,11 @@ void drain_remaining_statuses(Job *job) {
         }
       }
       continue;
-
-    } else if (w == 0)
+    }
+    if (w == 0) {
       return;
-
-    else if (w == -1) {
+    }
+    if (w == -1) {
       if (errno == EINTR) {
         continue;
       }
@@ -263,46 +93,3 @@ void drain_remaining_statuses(Job *job) {
     }
   }
 }
-
-void do_job_notification(Job *job, Job **job_head) {
-  if (job_is_completed(job)) {
-    if (job->background)
-      format_job_info(job, "Done");
-    free_job(job, job_head);
-  } else if (job_is_stopped(job))
-    format_job_info(job, "Stopped");
-}
-
-void notify_bg_jobs(Job **job_head) {
-  Job *j = *job_head;
-  Job *next = NULL;
-  while (j) {
-    next = j->next;
-    do_job_notification(j, job_head);
-    j = next;
-  }
-}
-
-int job_is_stopped(Job *job) {
-  Process *p;
-  for (p = job->first_process; p; p = p->next)
-    if (!p->stopped && !p->completed)
-      return 0;
-  return 1;
-}
-
-int job_is_completed(Job *job) {
-  Process *p;
-  for (p = job->first_process; p; p = p->next)
-    if (!p->completed)
-      return 0;
-  return 1;
-}
-
-void clear_stopped_mark(Job *job) {
-  Process *p;
-  for (p = job->first_process; p; p = p->next) {
-    p->stopped = 0;
-  }
-}
-

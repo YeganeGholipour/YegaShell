@@ -8,8 +8,9 @@
 #include <unistd.h>
 
 #include "builtin.h"
-#include "env_variable.h"
+#include "env_utils.h"
 #include "executor.h"
+#include "signal_utils.h"
 
 Builtin builtin_commands[] = {
     {"cd", cd_func},   {"help", help_func},     {"exit", exit_func},

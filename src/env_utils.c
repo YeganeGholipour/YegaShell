@@ -1,9 +1,12 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
+#include <unistd.h>
 
-#include "env_variable.h"
+#include "env_utils.h"
+
+Variable *variable_table[TABLESIZE] = {NULL};
 
 /* --- Hash function (K&R style) --- */
 unsigned hash(const char *s) {
@@ -126,4 +129,73 @@ int parse_key_value_inplace(char *input, char **key_out, char **val_out) {
   *key_out = input;  // KEY is at input
   *val_out = eq + 1; // VALUE is right after
   return 0;
+}
+
+char *get_full_path(const char *command) {
+  if (strchr(command, '/')) {
+    if (access(command, X_OK) == 0)
+      return strdup(command);
+    return NULL;
+  }
+
+  char *path = getenv("PATH");
+  if (!path)
+    return NULL;
+
+  char *paths = strdup(path);
+  if (!paths)
+    return NULL;
+
+  char *dir = strtok(paths, ":");
+  static char full_path[512];
+
+  while (dir) {
+    snprintf(full_path, sizeof(full_path), "%s/%s", dir, command);
+    if (access(full_path, X_OK) == 0) {
+      free(paths);
+      return strdup(full_path);
+    }
+    dir = strtok(NULL, ":");
+  }
+
+  free(paths);
+  return NULL;
+}
+
+char **build_envp(void) {
+  int count = 0;
+  for (int i = 0; i < TABLESIZE; i++)
+    for (Variable *vp = variable_table[i]; vp; vp = vp->next)
+      if (vp->exported)
+        count++;
+
+  char **envp = malloc((count + 1) * sizeof(char *));
+  if (!envp) {
+    perror("malloc envp array");
+    return NULL;
+  }
+
+  int idx = 0;
+  for (int i = 0; i < TABLESIZE; i++) {
+    for (Variable *vp = variable_table[i]; vp; vp = vp->next) {
+      if (!vp->exported)
+        continue;
+
+      size_t len = strlen(vp->key) + 1 + strlen(vp->value) + 1;
+      char *entry = malloc(len);
+      if (!entry) {
+        perror("malloc envp entry");
+        for (int k = 0; k < idx; k++)
+          free(envp[k]);
+        free(envp);
+        return NULL;
+      }
+
+      snprintf(entry, len, "%s=%s", vp->key, vp->value);
+      envp[idx++] = entry;
+    }
+  }
+
+  envp[idx] = NULL;
+  return envp;
 }

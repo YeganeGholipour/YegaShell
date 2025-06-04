@@ -1,7 +1,7 @@
 #ifndef BUILTIN_H
 #define BUILTIN_H
 
-#include "job_control.h"
+#include "job_utils.h"
 
 typedef struct {
   char *name;

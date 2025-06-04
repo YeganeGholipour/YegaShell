@@ -12,10 +12,11 @@
 #include "executor.h"
 #include "expander.h"
 #include "helper.h"
-#include "job_control.h"
+#include "job_utils.h"
 #include "parser.h"
-#include "signal_setup.h"
+#include "process_utils.h"
 #include "tokenizer.h"
+#include "signal_utils.h"
 
 int shell(void) {
   char *tokens[MAXTOKENS];
@@ -82,7 +83,7 @@ int shell(void) {
 
     /* ----- Process Phase ----- */
     Process *proc_head =
-        handle_processes(tokens, token_num, &command_ptr, &process_ptr);
+        initalize_processes(tokens, token_num, &command_ptr, &process_ptr);
 
     int func_num = is_bulitin(proc_head);
     if (func_num != -1) {
@@ -96,8 +97,8 @@ int shell(void) {
 
     /* ---- Job Control Phase ----- */
     else {
-      Job *new_job = handle_job_control(line_buffer, command_ptr, proc_head,
-                                        &job_ptr);
+      Job *new_job =
+          initialize_job_control(line_buffer, command_ptr, proc_head, &job_ptr);
       if (new_job == NULL) {
         fprintf(stderr, "Error: job control\n");
         free_memory(tokens, token_num);

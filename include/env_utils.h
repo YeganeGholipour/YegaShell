@@ -1,5 +1,5 @@
-#ifndef VARIABLE_H
-#define VARIABLE_H
+#ifndef ENV_UTILS_H
+#define ENV_UTILS_H
 
 #define TABLESIZE 100
 
@@ -20,5 +20,7 @@ void free_variable_table(void);
 void dump_variables(void);
 int is_valid_identifier(const char *s);
 int parse_key_value_inplace(char *input, char **key_out, char **val_out);
+char *get_full_path(const char *command);
+char **build_envp(void);
 
 #endif

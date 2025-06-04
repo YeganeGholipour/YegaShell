@@ -1,7 +1,7 @@
 #ifndef HELPER_H
 #define HELPER_H
 
-#include "job_control.h"
+#include "job_utils.h"
 
 int is_bulitin(Process *proc);
 int builtin_routine(int func_num, Process *proc_head, Job **job_ptr,
