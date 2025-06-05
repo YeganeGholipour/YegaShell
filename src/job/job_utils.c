@@ -188,6 +188,7 @@ void format_job_info(Job *job, char *status) {
   else
     fprintf(stderr, "[%ld]  %s      %s\n", (long)job->job_num, status,
             job->command);
+  fflush(stdout);
 }
 
 void drain_remaining_statuses(Job *job) {
