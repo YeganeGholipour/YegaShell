@@ -8,8 +8,9 @@
 #include <unistd.h>
 
 #include "builtin.h"
-#include "env_variable.h"
+#include "env_utils.h"
 #include "executor.h"
+#include "signal_utils.h"
 
 Builtin builtin_commands[] = {
     {"cd", cd_func},   {"help", help_func},     {"exit", exit_func},
@@ -25,6 +26,7 @@ int jobs_func(Process *proc, Job **job_head) {
     next = j->next;
     if (job_is_completed(j)) {
       // it should be freed by now!
+      format_job_info(j, "Done");
       free_job(j, job_head);
       j = next;
       continue;
@@ -122,7 +124,7 @@ int bg_func(Process *proc, Job **job_head) {
     // clear the stopped member for each process
     clear_stopped_mark(found_job);
     // show the command
-    printf("%s\n", found_job->command);
+    printf("%s &\n", found_job->command);
     if (kill(-found_job->pgid, SIGCONT) < 0) {
       perror("bg");
       sigprocmask(SIG_SETMASK, &prev_mask, NULL);

@@ -1,56 +1,20 @@
 #ifndef JOB_CONTROL_H
 #define JOB_CONTROL_H
 
+#include <signal.h>
+#include <unistd.h>
 #include <sys/types.h>
 
-#include "parser.h"
+#include "job_utils.h"
 
-typedef struct Process {
-  struct Process *next;
-  Command *cmd;
-  pid_t pid;
-  int completed;
-  int stopped;
-  int status;
-} Process;
+extern int last_exit_status;
 
-typedef struct Job {
-  struct Job *next;
-  char *command;
-  Process *first_process;
-  pid_t pgid;
-  pid_t *pids;
-  int job_num;
-  int num_procs;
-  int background;
-} Job;
+void setup_job_control(Job *job, Job **job_head, sigset_t *prev_mask,
+                       pid_t shell_pgid);
+void handle_foreground_job(sigset_t *prev_list, Job *job, pid_t shell_pgid,
+                           Job **job_head);
+void handle_background_job(sigset_t *prev_mask, Job *job);
+void wait_for_children(Job *job, int *pids, int num_procs);
 
-extern struct Pending {
-  pid_t pid;
-  int status;
-} pending_bg_jobs[256];
-
-extern int pending_indx;
-
-Job *handle_job_control(char *line_buffer, Command *cmd_ptr, Process *proc_ptr,
-                        Job **job_head);
-Process *handle_processes(char *tokens[], size_t num_tokens, Command **cmd_ptr,
-                          Process **proc_ptr);
-void free_job(Job *job, Job **head);
-void free_process_list(Process *proc);
-int get_num_procs(Job *job);
-void free_all_jobs(Job **head);
-void kill_jobs(Job **job_head);
-Job *find_job(Process *proc, Job **job_head);
-void queue_pending_procs(pid_t pid, int status);
-void mark_bg_jobs(Job **job_head, struct Pending pending_bg_jobs[],
-                  int pending_count);
-void drain_remaining_statuses(Job *job);
-void do_job_notification(Job *job, Job **job_head);
-int job_is_stopped(Job *job);
-int job_is_completed(Job *job);
-void clear_stopped_mark(Job *job);
-void notify_bg_jobs(Job **job_head);
-void format_job_info(Job *job, char *status);
 
 #endif

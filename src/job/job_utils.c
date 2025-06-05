@@ -7,47 +7,21 @@
 #include <sys/stat.h>
 #include <wait.h>
 
-#include "job_control.h"
+#include "job_utils.h"
 
 static Job *create_job(Job **job_ptr, char *line_buffer, Command *cmd);
-static Process *create_process(Process **proc_ptr, Command *cmd);
 
 int pending_indx = 0;
 struct Pending pending_bg_jobs[256] = {0};
 static long job_num = 1;
 
-Job *handle_job_control(char *line_buffer, Command *cmd_ptr,
-                        Process *proc_ptr, Job **job_head) {
+Job *initialize_job_control(char *line_buffer, Command *cmd_ptr,
+                            Process *proc_ptr, Job **job_head) {
 
   Job *new_job = create_job(job_head, line_buffer, cmd_ptr);
   new_job->first_process = proc_ptr;
   new_job->job_num = job_num++;
   return new_job;
-}
-
-Process *handle_processes(char *tokens[], size_t num_tokens, Command **cmd_ptr,
-                          Process **proc_ptr) {
-  int i = 0;
-
-  // see if bakground job character is valid
-  if (is_background_char_valid(tokens, num_tokens) == 0)
-    return NULL;
-
-  while (i < (int)num_tokens) {
-    int split_indx = split_on_pipe(tokens, num_tokens, cmd_ptr, i);
-    if (split_indx < 0) {
-      return NULL;
-    }
-
-    *proc_ptr = create_process(proc_ptr, *cmd_ptr);
-
-    if (split_indx < (int)num_tokens && strcmp(tokens[split_indx], "|") == 0) {
-      i = split_indx + 1;
-    } else {
-      break;
-    }
-  }
-  return *proc_ptr;
 }
 
 void kill_jobs(Job **job_head) {
@@ -129,16 +103,6 @@ static Job *create_job(Job **job_head_ptr, char *line_buffer, Command *cmd) {
   curr->next->background = (cmd->background ? 1 : 0);
 
   return curr->next;
-}
-
-static Process *create_process(Process **proc_ptr, Command *cmd) {
-  if (*proc_ptr == NULL) {
-    *proc_ptr = calloc(1, sizeof(Process));
-    (*proc_ptr)->cmd = cmd;
-  } else
-    (*proc_ptr)->next = create_process(&(*proc_ptr)->next, cmd);
-
-  return *proc_ptr;
 }
 
 int get_num_procs(Job *job) {
@@ -224,6 +188,7 @@ void format_job_info(Job *job, char *status) {
   else
     fprintf(stderr, "[%ld]  %s      %s\n", (long)job->job_num, status,
             job->command);
+  fflush(stdout);
 }
 
 void drain_remaining_statuses(Job *job) {
@@ -305,4 +270,3 @@ void clear_stopped_mark(Job *job) {
     p->stopped = 0;
   }
 }
-

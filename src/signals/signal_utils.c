@@ -1,17 +1,15 @@
 #define _POSIX_C_SOURCE 200809L
-
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <wait.h>
 
-#include "signal_setup.h"
-#include "job_control.h"
+#include "signal_utils.h"
+#include "job_utils.h"
 
 volatile sig_atomic_t interrupted = 0;
 volatile sig_atomic_t child_changed = 0;
-
 
 void sigint_handler(int sig) {
   (void)sig;
@@ -80,4 +78,33 @@ void init_shell_signals(void) {
     perror("sigaction SIGCHLD");
     exit(EXIT_FAILURE);
   }
+}
+
+void install_child_signal_handler(void) {
+  struct sigaction sa;
+  sa.sa_flags = 0;
+  sa.sa_handler = SIG_DFL;
+  sigemptyset(&sa.sa_mask);
+
+  sigaction(SIGINT, &sa, NULL);
+  sigaction(SIGQUIT, &sa, NULL);
+  sigaction(SIGTSTP, &sa, NULL);
+}
+
+int block_parent_signals(sigset_t *block_list, sigset_t *prev_list, Job *job) {
+  sigemptyset(block_list);
+  sigaddset(block_list, SIGCHLD);
+
+  if (!job->background) {
+    sigaddset(block_list, SIGINT);
+    sigaddset(block_list, SIGQUIT);
+    sigaddset(block_list, SIGTSTP);
+  }
+
+  if (sigprocmask(SIG_BLOCK, block_list, prev_list) < 0) {
+    perror("sigprocmask(block) before fork");
+    return -1;
+  }
+
+  return 0;
 }
