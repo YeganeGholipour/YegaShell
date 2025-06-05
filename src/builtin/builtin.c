@@ -10,12 +10,14 @@
 #include "builtin.h"
 #include "env_utils.h"
 #include "executor.h"
+#include "process_utils.h"
 #include "signal_utils.h"
 
-Builtin builtin_commands[] = {
-    {"cd", cd_func},   {"help", help_func},     {"exit", exit_func},
-    {"pwd", pwd_func}, {"export", export_func}, {"fg", fg_func},
-    {"bg", bg_func},   {"jobs", jobs_func},     {NULL, NULL}};
+Builtin builtin_commands[] = {{"cd", cd_func},         {"help", help_func},
+                              {"exit", exit_func},     {"pwd", pwd_func},
+                              {"export", export_func}, {"unset", unset_func},
+                              {"fg", fg_func},         {"bg", bg_func},
+                              {"jobs", jobs_func},     {NULL, NULL}};
 
 int jobs_func(Process *proc, Job **job_head) {
   mark_bg_jobs(job_head, pending_bg_jobs, pending_indx);
@@ -219,6 +221,17 @@ int export_func(Process *proc, Job **job_head) {
       fprintf(stderr, "export: failed to set `%s'\n", key);
       return 1;
     }
+  }
+  return 0;
+}
+
+int unset_func(Process *proc, Job **job_head) {
+  (void)job_head;
+  Command *cmd = proc->cmd;
+
+  if (remove_variable(cmd->argv[1]) != 0) {
+    fprintf(stderr, "unset: `%s': no such variable\n", cmd->argv[1]);
+    return 1;
   }
   return 0;
 }
