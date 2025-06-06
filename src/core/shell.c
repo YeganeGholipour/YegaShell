@@ -1,8 +1,6 @@
-/*
- * file:   shell.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   YegaShell core functionality which includes these phases:
+/**
+ * @file shell.c
+ * @brief YegaShell core functionality which includes these phases:
  *         1. Prompt
  *         2. Tokenize
  *         3. Parsing
@@ -11,6 +9,8 @@
  *         6. Execution
  *         7. Cleanup
  *         8. Exit
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #include <errno.h>
@@ -30,8 +30,8 @@
 #include "job_utils.h"
 #include "parser.h"
 #include "process_utils.h"
-#include "tokenizer.h"
 #include "signal_utils.h"
+#include "tokenizer.h"
 
 int shell(void) {
   char *tokens[MAXTOKENS];
@@ -73,7 +73,7 @@ int shell(void) {
         clearerr(stdin);
         continue;
       } else if (feof(stdin)) {
-        fprintf(stderr, " Detected EOF (Ctrl+D), exiting...\n");
+        fprintf(stderr, "\n");
         break; // safe
       } else {
         perror("getline");

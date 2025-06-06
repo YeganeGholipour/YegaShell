@@ -1,8 +1,8 @@
-/*
- * file:   job_utils.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   Functionalities for job creation phase and utilities for job control
+/**
+ * @file job_utils.c
+ * @brief Functionalities for job creation phase and utilities for job control.
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #include <errno.h>

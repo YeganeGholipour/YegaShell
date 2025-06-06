@@ -1,8 +1,6 @@
-/*
- * file:   shell.h
- * author: Yegane
- * date:   2025-06-06
- * desc:   YegaShell core functionality which includes these phases:
+/**
+ * @file shell.h
+ * @brief YegaShell core functionality which includes these phases:
  *         1. Prompt
  *         2. Tokenize
  *         3. Parsing
@@ -11,6 +9,8 @@
  *         6. Execution
  *         7. Cleanup
  *         8. Exit
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #ifndef SHELL_H

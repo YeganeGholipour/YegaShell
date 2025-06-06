@@ -1,8 +1,9 @@
-/*
- * file:   tokenizer.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   Implements functionality for tokenization of user input. Related to tokenization phase.
+/**
+ * @file tokenizer.c
+ * @brief Implements functionality for tokenization of user input. Related to
+ * tokenization phase.
+ * @author Yegane Gholipur Gholipour
+ * @date 2025-06-06
  */
 
 #define _POSIX_C_SOURCE 200809L

@@ -1,9 +1,9 @@
-/*
- * file:   io_redirection.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   Functions for setting up input and output redirection for child processes and
+/**
+ * @file io_redirection.c
+ * @brief Functions for setting up input and output redirection for child processes and
  *         closing pipe ends and freeing pipes
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #include <fcntl.h>

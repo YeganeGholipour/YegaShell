@@ -1,8 +1,8 @@
-/*
- * file:   builtin.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   Implements the built-in functions for built-in commands     
+/**
+ * @file builtin.c
+ * @brief Implements the built-in functions for built-in commands
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #define _POSIX_C_SOURCE 200809L

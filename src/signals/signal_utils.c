@@ -1,8 +1,9 @@
-/*
- * file:   signal_utils.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   Implements functionality for handling signals in both parent and child before and after fork.
+/**
+ * @file signal_utils.c
+ * @brief Implements functionality for handling signals in both parent and child
+ * before and after fork.
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #define _POSIX_C_SOURCE 200809L

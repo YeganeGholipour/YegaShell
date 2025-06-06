@@ -1,16 +1,17 @@
-/*
- * file:   helper.c
- * author: [Your Name]
- * date:   [Today's Date]
- * desc:   Collection of utility functions that provide supporting functionality for the YegaShell program.       
+/**
+ * @file helper.c
+ * @brief Collection of utility functions that provide supporting functionality
+ * for the YegaShell program.
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #include <stdlib.h>
 #include <string.h>
 
-#include "helper.h"
 #include "builtin.h"
 #include "executor.h"
+#include "helper.h"
 
 int is_bulitin(Process *proc) {
   char *command = proc->cmd->argv[0];

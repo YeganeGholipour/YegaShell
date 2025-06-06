@@ -1,12 +1,12 @@
-/*
- * file:   env_utils.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   Utilities for handling environment variables.
+/**
+ * @file env_utils.c
+ * @brief Utilities for handling environment variables.
  *         Adds, deletes, and updates environment variables.
  *         Creates the envp array of pointers.
  *         Envoronment variables are stored in a hash table
  *         implemented as a linked list.
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #include <ctype.h>

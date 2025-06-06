@@ -1,11 +1,11 @@
-/*
- * file:   executor.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   High-level functions for execution phase
+/**
+ * @file executor.c
+ * @brief High-level functions for execution phase
  *         Includes:
  *         1. Execution Functions
  *         2. Cleanup Function
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #define _POSIX_C_SOURCE 200809L

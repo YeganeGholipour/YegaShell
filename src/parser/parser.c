@@ -1,10 +1,11 @@
-/*
- * file:   parser.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   Implements functionalities for parsing user command. Related to parsing phase.
- *         Includes functions for allocating and freeing memory for commands.
- *         Also includes functions for validating the position of special characters.
+/**
+ * @file parser.c
+ * @brief Implements functionalities for parsing user command. Related to
+ * parsing phase. Includes functions for allocating and freeing memory for
+ * commands. Also includes functions for validating the position of special
+ * characters. characters.
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #include <stddef.h>

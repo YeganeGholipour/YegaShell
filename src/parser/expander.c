@@ -1,8 +1,9 @@
-/*
- * file:   expander.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   Implements functionality for expanding environment variables used in execution phase.
+/**
+ * @file expander.c
+ * @brief Implements functionality for expanding environment variables used in
+ * execution phase.
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #include <ctype.h>

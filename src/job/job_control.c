@@ -1,9 +1,9 @@
-/*
- * file:   job_control.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   Functionality for setting up job control in execution phase
+/**
+ * @file  job_control.c
+ * @brief Functionality for setting up job control in execution phase
  *         Includes functions for handling foreground and background jobs.
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #define _POSIX_C_SOURCE 200809L

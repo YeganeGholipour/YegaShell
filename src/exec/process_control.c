@@ -1,9 +1,9 @@
-/*
- * file:   process_control.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   Hanles forking and setting up child and parent processes.
+/**
+ * @file process_control.c
+ * @brief Handles forking and setting up child and parent processes.
  *         Includes utilities for creating and freeing pipes.
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #define _POSIX_C_SOURCE 200809L

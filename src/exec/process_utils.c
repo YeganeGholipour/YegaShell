@@ -1,9 +1,9 @@
-/*
- * file:   process_utils.c
- * author: Yegane
- * date:   2025-06-06
- * desc:   Functions to handle process creation phase
- *         Includes functionality for creating and initalizing processes
+/**
+ * @file process_utils.c
+ * @brief Functions to handle process creation phase
+ *         Includes functionality for creating and initalizing processes.
+ * @author Yegane Gholipur
+ * @date 2025-06-06
  */
 
 #include <stdlib.h>
