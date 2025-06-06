@@ -1,3 +1,11 @@
+/*
+ * file:   io_redirection.c
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Functions for setting up input and output redirection for child processes and
+ *         closing pipe ends and freeing pipes
+ */
+
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -20,7 +28,7 @@ int child_stdin_setup(Command *cmd, int (*pipes)[2], int proc_num) {
 }
 
 int child_stdout_setup(Command *cmd, int (*pipes)[2], int proc_num,
-                              int num_procs) {
+                       int num_procs) {
   if (cmd->outfile) {
     int flags = O_WRONLY | O_CREAT | (cmd->append_output ? O_APPEND : O_TRUNC);
     int out_fd = open(cmd->outfile, flags, 0644);
@@ -44,4 +52,4 @@ void close_pipe_ends(int num_procs, int (*pipes)[2]) {
   }
 }
 
-void free_pipes_and_pids(int (*pipes)[2]) { free(pipes); }
+void free_pipes(int (*pipes)[2]) { free(pipes); }

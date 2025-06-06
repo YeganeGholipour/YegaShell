@@ -1,3 +1,10 @@
+/*
+ * file:   job_utils.c
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Functionalities for job creation phase and utilities for job control
+ */
+
 #include <errno.h>
 #include <signal.h>
 #include <stddef.h>
@@ -10,6 +17,7 @@
 #include "job_utils.h"
 
 static Job *create_job(Job **job_ptr, char *line_buffer, Command *cmd);
+static void free_process_list(Process *proc);
 
 int pending_indx = 0;
 struct Pending pending_bg_jobs[256] = {0};
@@ -43,7 +51,7 @@ void free_all_jobs(Job **head) {
   }
 }
 
-void free_process_list(Process *proc) {
+static void free_process_list(Process *proc) {
   Process *curr = proc;
   Process *next;
 

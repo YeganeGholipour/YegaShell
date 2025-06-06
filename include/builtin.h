@@ -1,3 +1,10 @@
+/*
+ * file:   builtin.h
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   prototypes for builtin functions     
+ */
+
 #ifndef BUILTIN_H
 #define BUILTIN_H
 

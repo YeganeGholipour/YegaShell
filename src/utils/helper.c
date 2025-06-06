@@ -1,3 +1,10 @@
+/*
+ * file:   helper.c
+ * author: [Your Name]
+ * date:   [Today's Date]
+ * desc:   Collection of utility functions that provide supporting functionality for the YegaShell program.       
+ */
+
 #include <stdlib.h>
 #include <string.h>
 

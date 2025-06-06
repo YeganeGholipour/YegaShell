@@ -1,3 +1,10 @@
+/*
+ * file:   job_utils.h
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Functionalities for job creation phase and utilities for job control
+ */
+
 #ifndef JOB_UTILS_H
 #define JOB_UTILS_H
 
@@ -27,7 +34,6 @@ extern int pending_indx;
 Job *initialize_job_control(char *line_buffer, Command *cmd_ptr,
                             Process *proc_ptr, Job **job_head);
 void free_job(Job *job, Job **head);
-void free_process_list(Process *proc);
 int get_num_procs(Job *job);
 void free_all_jobs(Job **head);
 void kill_jobs(Job **job_head);

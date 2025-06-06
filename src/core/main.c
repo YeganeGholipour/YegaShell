@@ -1,10 +1,15 @@
+/*
+ * file:   main.c
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Main entry point of the YegaShell program. 
+ *         This file contains the main function that initiates the shell's execution.
+ *         
+ */
+
 #include "shell.h"
 
 int main(void) {
   return shell();
 }
-
-// TODO: why after bg%1 i don't see the correct line [1]+ sleep 10 & ?????
-// TODO: sometimes background jobs don't print after finishing
-// TODO: add test cases
 

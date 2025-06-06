@@ -1,3 +1,10 @@
+/*
+ * file:   builtin.c
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Implements the built-in functions for built-in commands     
+ */
+
 #define _POSIX_C_SOURCE 200809L
 
 #include <signal.h>

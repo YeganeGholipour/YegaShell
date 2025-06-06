@@ -1,3 +1,11 @@
+/*
+ * file:   io_redirection.h
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Function prototypes for setting up input and output redirection for child processes and
+ *         closing pipe ends and freeing pipes
+ */
+
 #ifndef IO_REDIRECTION_H
 #define IO_REDIRECTION_H
 
@@ -8,6 +16,6 @@ int child_stdout_setup(Command *cmd, int (*pipes)[2], int proc_num,
                        int num_procs);
 int child_stdin_setup(Command *cmd, int (*pipes)[2], int proc_num);
 void close_pipe_ends(int num_procs, int (*pipes)[2]);
-void free_pipes_and_pids(int (*pipes)[2]);
+void free_pipes(int (*pipes)[2]);
 
 #endif

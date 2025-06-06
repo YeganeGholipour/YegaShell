@@ -1,20 +1,29 @@
+/*
+ * file:   executor.c
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   High-level functions for execution phase
+ *         Includes:
+ *         1. Execution Functions
+ *         2. Cleanup Function
+ */
+
 #define _POSIX_C_SOURCE 200809L
 
-#include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
+#include <stdlib.h>
 #include <unistd.h>
 
-#include "process_control.h"
-#include "signal_utils.h"
-#include "job_control.h"
 #include "env_utils.h"
 #include "io_redirection.h"
+#include "job_control.h"
+#include "process_control.h"
+#include "signal_utils.h"
 
-int execute(Job *job, Job **job_head);
-void cleanup_job_execution(int num_procs, JobResource *job_res);
+static int execute(Job *job, Job **job_head);
+static void cleanup_job_execution(int num_procs, JobResource *job_res);
 
-int execute(Job *job, Job **job_head) {
+static int execute(Job *job, Job **job_head) {
   JobResource job_res;
   pid_t shell_pgid = getpid();
   pid_t pgid = 0;
@@ -56,14 +65,7 @@ int executor(Job *job, Job **job_head) {
   return execute_status;
 }
 
-
-
-void cleanup_job_execution(int num_procs, JobResource *job_res) {
+static void cleanup_job_execution(int num_procs, JobResource *job_res) {
   close_pipe_ends(num_procs, job_res->pipes);
-  free_pipes_and_pids(job_res->pipes);
+  free_pipes(job_res->pipes);
 }
-
-
-/* --------------------------------------------------------- */
-
-

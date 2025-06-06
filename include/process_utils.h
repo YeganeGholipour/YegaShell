@@ -1,3 +1,11 @@
+/*
+ * file:   process_utils.h
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Prototypes to handle process creation phase.
+ *         Includes a function for initalizing processes.  
+ */
+
 #ifndef PROCESS_UTILS_H
 #define PROCESS_UTILS_H
 

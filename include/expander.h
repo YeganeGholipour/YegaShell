@@ -1,3 +1,10 @@
+/*
+ * file:   expander.h
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Implements functionality for expanding environment variables used in execution phase.
+ */
+
 #ifndef EXPANDER_H
 #define EXPANDER_H
 

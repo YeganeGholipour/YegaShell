@@ -1,3 +1,10 @@
+/*
+ * file:   signal_utils.c
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Implements functionality for handling signals in both parent and child before and after fork.
+ */
+
 #define _POSIX_C_SOURCE 200809L
 #include <signal.h>
 #include <stdio.h>
@@ -11,19 +18,23 @@
 volatile sig_atomic_t interrupted = 0;
 volatile sig_atomic_t child_changed = 0;
 
-void sigint_handler(int sig) {
+static void sigint_handler(int sig);
+static void sigquit_handler(int sig);
+static void sigchld_handler(int sig);
+
+static void sigint_handler(int sig) {
   (void)sig;
   interrupted = 1;
   write(STDOUT_FILENO, "\n", 1);
 }
 
-void sigquit_handler(int sig) {
+static void sigquit_handler(int sig) {
   (void)sig;
   interrupted = 1;
   write(STDOUT_FILENO, "\n", 1);
 }
 
-void sigchld_handler(int sig) {
+static void sigchld_handler(int sig) {
   (void)sig;
   pid_t w;
   int status;

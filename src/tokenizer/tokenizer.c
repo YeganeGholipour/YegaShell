@@ -1,3 +1,10 @@
+/*
+ * file:   tokenizer.c
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Implements functionality for tokenization of user input. Related to tokenization phase.
+ */
+
 #define _POSIX_C_SOURCE 200809L
 
 #include <ctype.h>
@@ -12,17 +19,12 @@
 
 static const char special_characters[SPECIALCHARLEN] = {'>', '<', '&', '|'};
 
-// MEMORY FUNCTIONS
-int store_token(char *argument, char *tokens[], int max_tokens, int *token_num);
-
-// HELPER FUNCTIONS
-bool is_special_char(char character);
-bool is_valid_double_operator(char first, char second);
-
-// INPUT HANDLERS
-char *handle_single_quotes(char token_buffer[], char *p, int max_len);
-char *handle_double_quotes(char token_buffer[], char *p, int max_len);
-char *handle_special_characters(char token_buffer[], char *p, int max_len);
+static int store_token(char *argument, char *tokens[], int max_tokens, int *token_num);
+static bool is_special_char(char character);
+static bool is_valid_double_operator(char first, char second);
+static char *handle_single_quotes(char token_buffer[], char *p, int max_len);
+static char *handle_double_quotes(char token_buffer[], char *p, int max_len);
+static char *handle_special_characters(char token_buffer[], char *p, int max_len);
 
 int prompt_and_read(char **line_buffer, ssize_t *read, size_t *buffsize) {
   printf("YegaShell> ");
@@ -47,7 +49,7 @@ void print_tokens(char *tokens[], int token_num) {
   }
 }
 
-int store_token(char *argument, char *tokens[], int max_tokens,
+static int store_token(char *argument, char *tokens[], int max_tokens,
                 int *token_num) {
   char *p;
   if (*token_num < max_tokens && ((p = malloc(strlen(argument) + 1)) != NULL)) {
@@ -109,19 +111,19 @@ int tokenize_line(char *line, char *tokens[], int max_tokens, int max_len,
   return 0;
 }
 
-bool is_special_char(char character) {
+static bool is_special_char(char character) {
   for (int i = 0; i < SPECIALCHARLEN; i++)
     if (character == special_characters[i])
       return true;
   return false;
 }
 
-bool is_valid_double_operator(char first, char second) {
+static bool is_valid_double_operator(char first, char second) {
   return (first == '>' && second == '>') || (first == '<' && second == '<') ||
          (first == '&' && second == '&') || (first == '|' && second == '|');
 }
 
-char *handle_single_quotes(char token_buffer[], char *p, int max_len) {
+static char *handle_single_quotes(char token_buffer[], char *p, int max_len) {
   while (max_len > 1) {
     if (*++p == '\0')
       return NULL;
@@ -136,7 +138,7 @@ char *handle_single_quotes(char token_buffer[], char *p, int max_len) {
   return p + 1;
 }
 
-char *handle_double_quotes(char token_buffer[], char *p, int max_len) {
+static char *handle_double_quotes(char token_buffer[], char *p, int max_len) {
   while (max_len > 1) {
     if (*++p == '\0')
       return NULL;
@@ -160,7 +162,7 @@ char *handle_double_quotes(char token_buffer[], char *p, int max_len) {
 
 // Escape characters are not processed in single quotes yet (like in real
 // shells)
-char *handle_special_characters(char token_buffer[], char *p, int max_len) {
+static char *handle_special_characters(char token_buffer[], char *p, int max_len) {
   char character = *p;
   if (max_len > 1) {
     *token_buffer++ = character;

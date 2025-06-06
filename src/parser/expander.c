@@ -1,3 +1,10 @@
+/*
+ * file:   expander.c
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Implements functionality for expanding environment variables used in execution phase.
+ */
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>

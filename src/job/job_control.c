@@ -1,3 +1,11 @@
+/*
+ * file:   job_control.c
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Functionality for setting up job control in execution phase
+ *         Includes functions for handling foreground and background jobs.
+ */
+
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
@@ -8,6 +16,8 @@
 #include <unistd.h>
 
 #include "job_control.h"
+
+static void wait_for_children(Job *job, int *pids, int num_procs);
 
 int last_exit_status = 0;
 
@@ -48,7 +58,7 @@ void handle_background_job(sigset_t *prev_mask, Job *job) {
   fprintf(stderr, "[%ld]  %ld\n", (long)job->job_num, (long)job->pgid);
 }
 
-void wait_for_children(Job *job, int *pids, int num_procs) {
+static void wait_for_children(Job *job, int *pids, int num_procs) {
   int status;
   pid_t w;
 

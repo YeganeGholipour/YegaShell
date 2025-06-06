@@ -1,3 +1,10 @@
+/*
+ * file:   tokenizer.h
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Implements functionality for tokenization of user input. Related to tokenization phase.
+ */
+
 #ifndef TOKENIZER_H
 #define TOKENIZER_H
 

@@ -1,3 +1,14 @@
+/*
+ * file:   env_utils.c
+ * author: Yegane
+ * date:   2025-06-06
+ * desc:   Utilities for handling environment variables.
+ *         Adds, deletes, and updates environment variables.
+ *         Creates the envp array of pointers.
+ *         Envoronment variables are stored in a hash table
+ *         implemented as a linked list.
+ */
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,10 +17,12 @@
 
 #include "env_utils.h"
 
+static unsigned hash(const char *s);
+
 Variable *variable_table[TABLESIZE] = {NULL};
 
 /* --- Hash function (K&R style) --- */
-unsigned hash(const char *s) {
+static unsigned hash(const char *s) {
   unsigned hashval = 0;
   while (*s)
     hashval = *s++ + 31 * hashval;
@@ -84,21 +97,6 @@ int remove_variable(const char *key) {
     vp = vp->next;
   }
   return -1;
-}
-
-/* --- Free entire table (e.g., at shell exit) --- */
-void free_variable_table(void) {
-  for (int i = 0; i < TABLESIZE; i++) {
-    Variable *vp = variable_table[i];
-    while (vp) {
-      Variable *next = vp->next;
-      free(vp->key);
-      free(vp->value);
-      free(vp);
-      vp = next;
-    }
-    variable_table[i] = NULL;
-  }
 }
 
 /* --- (Optional) Debug: print all variables --- */
