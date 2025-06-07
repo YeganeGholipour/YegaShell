@@ -21,7 +21,6 @@ static unsigned hash(const char *s);
 
 Variable *variable_table[TABLESIZE] = {NULL};
 
-/* --- Hash function (K&R style) --- */
 static unsigned hash(const char *s) {
   unsigned hashval = 0;
   while (*s)
@@ -37,11 +36,9 @@ Variable *lookup(const char *key) {
   return NULL;
 }
 
-/* --- Add or update a variable --- */
 Variable *add_variable(const char *key, const char *value, int exported) {
   Variable *vp = lookup(key);
   if (!vp) {
-    /* Not found: create new node */
     vp = malloc(sizeof(Variable));
     if (!vp) {
       perror("malloc");
@@ -74,7 +71,6 @@ Variable *add_variable(const char *key, const char *value, int exported) {
   return vp;
 }
 
-/* --- Remove a variable; returns 0 on success, -1 if not found --- */
 int remove_variable(const char *key) {
   unsigned idx = hash(key);
   Variable *vp = variable_table[idx];
@@ -82,12 +78,10 @@ int remove_variable(const char *key) {
 
   while (vp) {
     if (strcmp(vp->key, key) == 0) {
-      /* Unlink */
       if (prev)
         prev->next = vp->next;
       else
         variable_table[idx] = vp->next;
-      /* Free memory */
       free(vp->key);
       free(vp->value);
       free(vp);
@@ -99,7 +93,6 @@ int remove_variable(const char *key) {
   return -1;
 }
 
-/* --- (Optional) Debug: print all variables --- */
 void dump_variables(void) {
   for (int i = 0; i < TABLESIZE; i++) {
     for (Variable *vp = variable_table[i]; vp; vp = vp->next) {
@@ -119,13 +112,27 @@ int is_valid_identifier(const char *s) {
   return 1;
 }
 
+void free_variable_table(void) {
+  for (int i = 0; i < TABLESIZE; i++) {
+    Variable *vp = variable_table[i];
+    while (vp) {
+      Variable *next = vp->next;
+      free(vp->key);
+      free(vp->value);
+      free(vp);
+      vp = next;
+    }
+    variable_table[i] = NULL;
+  }
+}
+
 int parse_key_value_inplace(char *input, char **key_out, char **val_out) {
   char *eq = strchr(input, '=');
   if (!eq)
-    return -1;       // invalid, no '='
-  *eq = '\0';        // replace '=' with NUL
-  *key_out = input;  // KEY is at input
-  *val_out = eq + 1; // VALUE is right after
+    return -1;       
+  *eq = '\0';       
+  *key_out = input;  
+  *val_out = eq + 1; 
   return 0;
 }
 

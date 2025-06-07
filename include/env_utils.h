@@ -105,4 +105,7 @@ char *get_full_path(const char *command);
  */
 char **build_envp(void);
 
+
+void free_variable_table(void);
+
 #endif
