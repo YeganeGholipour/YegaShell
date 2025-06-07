@@ -89,7 +89,7 @@ int shell(void) {
     token_status =
         tokenize_line(line_buffer, tokens, MAXTOKENS, MAXLEN, &token_num);
     if (token_status < 0) {
-      fprintf(stderr, "Error: tokenizing input\n");
+      fprintf(stderr, "\n");
       free_memory(tokens, token_num);
       continue;
     }
