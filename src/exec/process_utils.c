@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "expander.h"
 #include "parser.h"
@@ -29,9 +30,10 @@ Process *initalize_processes(char *tokens[], size_t num_tokens,
       return NULL;
     }
 
-    expander(*cmd_ptr);
 
     *proc_ptr = create_process(proc_ptr, *cmd_ptr);
+    // expander(*cmd_ptr);
+    printf("cmd: %s\n", (*cmd_ptr)->argv[0]);
 
     if (split_indx < (int)num_tokens && strcmp(tokens[split_indx], "|") == 0) {
       i = split_indx + 1;

@@ -1,11 +1,11 @@
 CC := gcc
-CFLAGS := -Wall -Werror -Wextra -Iinclude -g
+CFLAGS := -Wall -Werror -Wextra -fsanitize=address,undefined -Iinclude -g -O1 -fno-omit-frame-pointer 
 SRC = $(shell find src -name "*.c")
 OBJ = $(SRC:src/%.c=build/%.o)
 TARGET = build/my_program
 
 $(TARGET): $(OBJ)
-	$(CC) $(OBJ) -o $(TARGET)
+	$(CC) $(CFLAGS) $(OBJ) -o $(TARGET)
 
 build/%.o: src/%.c
 	@mkdir -p $(dir $@)
