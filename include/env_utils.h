@@ -108,4 +108,8 @@ char **build_envp(void);
 
 void free_variable_table(void);
 
+int initialize_envp(char ***envpp);
+
+void free_envp(char **envp);
+
 #endif
