@@ -30,10 +30,9 @@ Process *initalize_processes(char *tokens[], size_t num_tokens,
       return NULL;
     }
 
-
     *proc_ptr = create_process(proc_ptr, *cmd_ptr);
-    // expander(*cmd_ptr);
-    printf("cmd: %s\n", (*cmd_ptr)->argv[0]);
+
+    expander(*cmd_ptr);
 
     if (split_indx < (int)num_tokens && strcmp(tokens[split_indx], "|") == 0) {
       i = split_indx + 1;
