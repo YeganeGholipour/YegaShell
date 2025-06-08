@@ -21,7 +21,7 @@
 #include "signal_utils.h"
 
 static int execute(Job *job, Job **job_head);
-static void cleanup_job_execution(int num_procs, JobResource *job_res);
+static void cleanup_job_execution(int num_procs, JobResource *job_res, char **envp);
 
 static int execute(Job *job, Job **job_head) {
   JobResource job_res;
@@ -29,6 +29,10 @@ static int execute(Job *job, Job **job_head) {
   pid_t pgid = 0;
   sigset_t parent_block_mask, prev_mask;
   int local_num_procs = job->num_procs;
+  char **envp = NULL;
+  
+  if (initialize_envp(&envp) < 0)
+    return -1;
 
   if (setup_exec_resource(job, &job_res) < 0)
     return -1;
@@ -39,12 +43,12 @@ static int execute(Job *job, Job **job_head) {
   if (block_parent_signals(&parent_block_mask, &prev_mask, job) < 0)
     return -1;
 
-  if (fork_and_setup_processes(job, job_res, &pgid, &prev_mask) < 0)
+  if (fork_and_setup_processes(job, job_res, &pgid, &prev_mask, envp) < 0)
     return -1;
 
   setup_job_control(job, job_head, &prev_mask, shell_pgid);
 
-  cleanup_job_execution(local_num_procs, &job_res);
+  cleanup_job_execution(local_num_procs, &job_res, envp);
 
   return 0;
 }
@@ -65,7 +69,8 @@ int executor(Job *job, Job **job_head) {
   return execute_status;
 }
 
-static void cleanup_job_execution(int num_procs, JobResource *job_res) {
+static void cleanup_job_execution(int num_procs, JobResource *job_res, char **envp) {
   close_pipe_ends(num_procs, job_res->pipes);
   free_pipes(job_res->pipes);
+  free_envp(envp); 
 }

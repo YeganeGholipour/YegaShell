@@ -62,6 +62,6 @@ int create_pipes(Job *job, JobResource *job_res);
  * @return 0 on success, -1 on failure.
  */
 int fork_and_setup_processes(Job *job, JobResource job_res, int *pgid,
-                             sigset_t *prev_mask);
+                             sigset_t *prev_mask, char **envp);
 
 #endif

@@ -22,11 +22,11 @@
 #include "process_control.h"
 #include "signal_utils.h"
 
-static void exec_command(Command *cmd);
+static void exec_command(Command *cmd, char **envp);
 static int allocate_pipe(Job *job, JobResource *job_res);
 static int allocate_pids(Job *job);
 static void child_setup(pid_t pgid, sigset_t *prev_mask, int (*pipes)[],
-                        int proc_num, Command *cmd, Job *job);
+                        int proc_num, Command *cmd, Job *job, char **envp);
 static void parent_setup(pid_t *pgid, int pid, int proc_num, int (*pipes)[2],
                          Process *proc, Job *job);
 
@@ -56,7 +56,7 @@ int create_pipes(Job *job, JobResource *job_res) {
 }
 
 int fork_and_setup_processes(Job *job, JobResource job_res, int *pgid,
-                             sigset_t *prev_mask) {
+                             sigset_t *prev_mask, char **envp) {
   Process *proc;
   int proc_num;
   Command *cmd;
@@ -75,7 +75,7 @@ int fork_and_setup_processes(Job *job, JobResource job_res, int *pgid,
     }
 
     if (pid == 0)
-      child_setup(*pgid, prev_mask, job_res.pipes, proc_num, cmd, job);
+      child_setup(*pgid, prev_mask, job_res.pipes, proc_num, cmd, job, envp);
     else
       parent_setup(pgid, pid, proc_num, job_res.pipes, proc, job);
   }
@@ -109,7 +109,7 @@ static int allocate_pids(Job *job) {
 }
 
 static void child_setup(pid_t pgid, sigset_t *prev_mask, int (*pipes)[],
-                        int proc_num, Command *cmd, Job *job) {
+                        int proc_num, Command *cmd, Job *job, char **envp) {
   install_child_signal_handler();
 
   if (setpgid(0, pgid) < 0) {
@@ -133,7 +133,7 @@ static void child_setup(pid_t pgid, sigset_t *prev_mask, int (*pipes)[],
   }
 
   close_pipe_ends(job->num_procs, pipes);
-  exec_command(cmd);
+  exec_command(cmd, envp);
   perror("execve failed");
   exit(EXIT_FAILURE);
 }
@@ -158,17 +158,10 @@ static void parent_setup(pid_t *pgid, int pid, int proc_num, int (*pipes)[2],
   }
 }
 
-static void exec_command(Command *cmd) {
+static void exec_command(Command *cmd, char **envp) {
   char *full_path = get_full_path(cmd->argv[0]);
   if (!full_path) {
     fprintf(stderr, "%s: command not found\n", cmd->argv[0]);
-    exit(EXIT_FAILURE);
-  }
-  char **envp = build_envp();
-  if (!envp) {
-    fprintf(stderr, "Failed to build environment\n");
-    free(full_path);
-    free(envp);
     exit(EXIT_FAILURE);
   }
 

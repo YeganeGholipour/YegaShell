@@ -204,3 +204,16 @@ char **build_envp(void) {
   envp[idx] = NULL;
   return envp;
 }
+
+int initialize_envp(char ***envpp) {
+  *envpp = build_envp();
+  if (!*envpp)
+    return -1;
+  return 0;
+}
+
+void free_envp(char **envp) {
+  for (int i = 0; envp[i]; i++)
+    free(envp[i]);
+  free(envp);
+}
