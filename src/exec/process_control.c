@@ -171,7 +171,6 @@ static void exec_command(Command *cmd) {
     free(envp);
     exit(EXIT_FAILURE);
   }
-  expander(cmd, envp);
 
   execve(full_path, cmd->argv, envp);
 }

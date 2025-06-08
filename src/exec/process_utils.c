@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "expander.h"
 #include "parser.h"
 #include "process_utils.h"
 
@@ -27,6 +28,8 @@ Process *initalize_processes(char *tokens[], size_t num_tokens,
     if (split_indx < 0) {
       return NULL;
     }
+
+    expander(*cmd_ptr);
 
     *proc_ptr = create_process(proc_ptr, *cmd_ptr);
 
