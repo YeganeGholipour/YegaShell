@@ -12,29 +12,22 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "env_utils.h"
 #include "expander.h"
 #include "parser.h"
 
-const char *get_env(const char *argument, char **envp) {
-  while (*envp != NULL) {
-    char *equal_sign = strchr(*envp, '=');
-    if (equal_sign) {
-      size_t key_len = equal_sign - *envp;
-      char key[key_len + 1];
-      strncpy(key, *envp, key_len);
-      key[key_len] = '\0';
+static const char *get_env(const char *name);
+static char *expand_variable(const char *token);
 
-      if (strcmp(key, argument) == 0) {
-        return equal_sign + 1;
-      }
-    }
-    envp++;
+static const char *get_env(const char *name) {
+  Variable *vp = lookup(name);
+  if (vp != NULL) {
+    return vp->value;
   }
-
-  return getenv(argument);
+  return getenv(name);
 }
 
-static char *expand_variable(const char *token, char **envp) {
+static char *expand_variable(const char *token) {
   int i = 1;
   if (!(isalpha(token[i]) || token[i] == '_'))
     return NULL;
@@ -47,7 +40,7 @@ static char *expand_variable(const char *token, char **envp) {
 
   size_t rest_len = strlen(token + i);
 
-  const char *env = get_env(arg, envp);
+  const char *env = get_env(arg);
   size_t env_len = env ? strlen(env) : 0;
 
   char *out = malloc(env_len + rest_len + 1);
@@ -63,22 +56,27 @@ static char *expand_variable(const char *token, char **envp) {
   return out;
 }
 
-void expander(Command *cmd, char **envp) {
+void expander(Command *cmd) {
   for (int i = 1; cmd->argv[i] != NULL; i++) {
     char *token = cmd->argv[i];
     if (token[0] == '$') {
-      char *newstr;
+      char *newstr = NULL;
       if (strcmp(token, "$$") == 0) {
         char pid_tmp[20];
         snprintf(pid_tmp, sizeof pid_tmp, "%d", getpid());
         newstr = strdup(pid_tmp);
       } else if (strcmp(token, "$?") == 0) {
         char exit_status[12];
-        snprintf(exit_status, sizeof(exit_status), "%d", last_exit_status);
+        snprintf(exit_status, sizeof exit_status, "%d", last_exit_status);
         newstr = strdup(exit_status);
       } else {
-        newstr = expand_variable(token, envp);
+        newstr = expand_variable(token);
+        if (!newstr) {
+          newstr = strdup(""); 
+          fprintf(stderr, "expander: failed to expand variable '%s'\n", token);
+        }
       }
+
       free(token);
       cmd->argv[i] = newstr;
     }
@@ -86,12 +84,28 @@ void expander(Command *cmd, char **envp) {
 
   if (cmd->infile && cmd->infile[0] == '$') {
     char *old = cmd->infile;
-    cmd->infile = expand_variable(old, envp);
-    free(old);
+    char *newstr = expand_variable(old);
+    if (newstr) {
+      cmd->infile = newstr;
+      free(old);
+    } else {
+      fprintf(stderr, "expander: failed to expand infile variable '%s'\n", old);
+      cmd->infile = strdup("");
+      free(old);
+    }
   }
+
   if (cmd->outfile && cmd->outfile[0] == '$') {
     char *old = cmd->outfile;
-    cmd->outfile = expand_variable(old, envp);
-    free(old);
+    char *newstr = expand_variable(old);
+    if (newstr) {
+      cmd->outfile = newstr;
+      free(old);
+    } else {
+      fprintf(stderr, "expander: failed to expand outfile variable '%s'\n",
+              old);
+      cmd->outfile = strdup("");
+      free(old);
+    }
   }
 }

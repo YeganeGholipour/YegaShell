@@ -13,8 +13,8 @@
 #include <unistd.h>
 #include <wait.h>
 
-#include "signal_utils.h"
 #include "job_utils.h"
+#include "signal_utils.h"
 
 volatile sig_atomic_t interrupted = 0;
 volatile sig_atomic_t child_changed = 0;
@@ -26,13 +26,15 @@ static void sigchld_handler(int sig);
 static void sigint_handler(int sig) {
   (void)sig;
   interrupted = 1;
-  write(STDOUT_FILENO, "\n", 1);
+  if (write(STDOUT_FILENO, "\n", 1) == -1) {
+  }
 }
 
 static void sigquit_handler(int sig) {
   (void)sig;
   interrupted = 1;
-  write(STDOUT_FILENO, "\n", 1);
+  if (write(STDOUT_FILENO, "\n", 1) == -1) {
+  }
 }
 
 static void sigchld_handler(int sig) {

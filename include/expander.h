@@ -29,6 +29,6 @@ extern int last_exit_status;
  * @param cmd The Command struct to expand.
  * @param envp The array of environment variables.
  */
-void expander(Command *cmd, char **envp);
+void expander(Command *cmd);
 
 #endif
