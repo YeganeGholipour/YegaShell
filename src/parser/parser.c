@@ -66,6 +66,10 @@ void free_struct_memory(Command *cmd) {
 }
 
 int parse(char *tokens[], Command **cmd_ptr, size_t num_tokens) {
+  if (tokens == NULL || num_tokens == 0 || tokens[0] == NULL) {
+    fprintf(stderr, "parser: no tokens to parse\n");
+    return -1;
+  }
   Command *cmd = allocate_memory(num_tokens);
   if (!cmd)
     return -1;
@@ -159,6 +163,12 @@ int split_on_pipe(char *tokens[], size_t num_tokens, Command **cmd_ptr,
     process_command[j++] = tokens[indx++];
   }
   process_command[j] = NULL;
+
+  if (j == 0) {
+    // No real token before the "|" (or tokens[indx] was NULL).
+    fprintf(stderr, "parser: syntax error near unexpected `|`\n");
+    return -1;
+  }
 
   int parser_status = parse(process_command, cmd_ptr, j);
   if (parser_status < 0) {
