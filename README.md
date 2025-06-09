@@ -2,7 +2,7 @@
 
 > **My First Shell in C: The Messy Truth About What Worked and What Failed**  
 > A minimal, educational Unix‐style shell written in C.  
-> Read the full blog post [here](https://your-blog-url.example.com/my-first-shell-project-in-c), where I break down my mistake  and lesson learned.
+> Read the full blog post [here](https://dev.to/yeganegholipour/my-first-shell-project-in-c-the-messy-truth-about-what-worked-and-what-failed-5ge8), where I break down my mistake  and lesson learned.
 
 ---
 
@@ -269,7 +269,7 @@ If you find other bugs or weird behavior, please [open an issue](https://github.
 
 ## Planned Improvements
 
-Based on my ongoing learning and reader feedback (from the [blog post](https://your-blog-url.example.com/my-first-shell-project-in-c)):
+Based on my ongoing learning and reader feedback (from the [blog post](https://dev.to/yeganegholipour/my-first-shell-project-in-c-the-messy-truth-about-what-worked-and-what-failed-5ge8)):
 
 - **Command History**  
   Press ↑/↓ to navigate previous commands (using `readline` or a custom implementation).  
@@ -288,40 +288,13 @@ Based on my ongoing learning and reader feedback (from the [blog post](https://y
 - **Unit & Integration Test Coverage**  
   Expand tests to cover `exec/`, `signals/`, and end‐to‐end scenarios.  
 
-Contributions and pull requests for any of these features are welcome—see [“How to Contribute”](#how-to-contribute) below.
 
 ---
 
 ## How to Contribute
 
-If you’d like to help improve YegaShell, follow these steps:
+I’ll review your PR. I'm still learning so I appreciate any feedback from you.
 
-1. **Fork this repository**  
-   Click “Fork” in the top‐right corner of GitHub. Clone your fork locally.
-
-2. **Create a feature branch**  
-   ```bash
-   git checkout -b feature/my-new-feature
-   ```
-
-3. **Implement your changes**  
-   - Follow existing code style (K&R indentation, snake_case function names).  
-   - Add comments for any non‐obvious logic.  
-   - Update or add tests for new functionality.
-
-4. **Commit & push**  
-   ```bash
-   git add .
-   git commit -m "Add <brief-description-of-your-change>"
-   git push origin feature/my-new-feature
-   ```
-
-5. **Open a Pull Request**  
-   On GitHub, navigate to your fork and click “Compare & pull request.”  
-   Provide a clear description of what you did, why it’s valuable, and any testing notes.
-
-6. **Respond to feedback**  
-   I’ll review your PR. I'm still learning so I appreciate any feedback from you.
 
 ---
 
