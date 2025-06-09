@@ -40,7 +40,7 @@
 *.hex
 build/
 build/my_program
-
+/media/yegane/my-ssd/C-Projects/YegaShell/build/my_program
 # Debug files
 *.dSYM/
 *.su
